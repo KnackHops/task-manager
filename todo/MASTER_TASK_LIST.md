@@ -563,6 +563,7 @@ search_tasks project=nonstop query="email template"   → search by text
 - [ ] Pagination / virtualization
 - [ ] Security audit
 - [ ] MCP `read_attachment` tool — auto-download + extract zip attachments (prototypes), return file tree + contents to agent in one call. Eliminates manual download/extract/read workflow
+- [ ] MCP Streamable HTTP transport — convert stdio → Streamable HTTP, deploy as service on Coolify, API key auth. Frontend UI for generating/managing API keys per user. Devs just add a URL to MCP config, no local build needed
 
 ---
 
