@@ -198,7 +198,7 @@ All policies based on `project_members` table (not `profiles.role`):
 
 ### Task Components
 - [x] `src/components/task/CreateTaskDialog.tsx` — column selector (defaults to project default column), tag multi-select, multi-assignee select
-- [x] `src/components/task/TaskDetailPanel.tsx` — task ID in header, column/priority selectors, multi-assignee select, tag management, archive/unarchive, permission-gated
+- [x] `src/components/task/TaskDetailPanel.tsx` — task ID (primary color) in header, full-width layout, collapsible "Details" section (2-col grid: column/priority/sprint/story points/assignees/tags), horizontal action buttons, localStorage-persisted collapse state, permission-gated
 
 ### Archive
 - [x] `src/components/archive/ArchiveView.tsx` — list of archived tasks, column selector for restore, task ID display
@@ -658,6 +658,34 @@ search_tasks project=nonstop query="email template"   → search by text
 - [x] `fill-current` was making icon a solid green blob — now stroke-only, green stroke when active
 
 ### 14.2.11 Build Verification
+- [x] `npm run build` — passes clean (tsc + vite)
+
+---
+
+## PHASE 14.3: TASK DETAIL PANEL REDESIGN ✅ COMPLETE
+
+> Replaced cramped 2/3 + 1/3 sidebar layout with full-width content + collapsible "Details" section. Better UX for description editing and attachment viewing.
+
+### 14.3.1 Layout Overhaul
+- [x] Removed `grid grid-cols-3` sidebar layout — content now full-width
+- [x] Dialog widened from `max-w-2xl` to `max-w-3xl`
+- [x] Description min-heights increased (read: `min-h-[120px]`, edit: `min-h-[200px]`)
+
+### 14.3.2 Collapsible Details Section
+- [x] All task fields (column, priority, sprint, story points, assignees, tags) in collapsible "Details" section
+- [x] 2-column grid layout for fields
+- [x] ChevronDown/ChevronRight toggle icon
+- [x] State persisted in `localStorage('taskDetailPanelDetailsOpen')`, defaults to `true`
+
+### 14.3.3 Action Buttons
+- [x] Mark as Done, Archive, Delete — horizontal row (was vertical stack in sidebar)
+
+### 14.3.4 Header Cleanup
+- [x] Task ID enlarged: `text-sm text-primary font-mono` (was `text-xs text-muted-foreground`)
+- [x] Removed redundant PriorityBadge + TagBadge display (info already in selects)
+- [x] Moved TagSelect from left column to Details section
+
+### 14.3.5 Build Verification
 - [x] `npm run build` — passes clean (tsc + vite)
 
 ---
