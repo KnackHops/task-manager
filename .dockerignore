@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+.env
+.env.local
+.env.*.local
+.git
+.gitignore
+.DS_Store
+*.log
+todo/
+.claude/
+mcp-server/node_modules
+mcp-server/dist
