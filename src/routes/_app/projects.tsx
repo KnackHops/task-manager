@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { Plus, Star } from 'lucide-react'
 import { AppShell } from '@/components/layout/AppShell'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useMyProjects } from '@/hooks/useProjects'
 import { useToggleFavorite } from '@/hooks/useMembers'
 import { CreateProjectDialog } from '@/components/project/CreateProjectDialog'
@@ -90,8 +91,23 @@ function ProjectsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-lg border border-border bg-card p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-14" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : !projects?.length ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">

@@ -8,6 +8,33 @@ import type {
 import { setTaskTags } from './tags'
 import { setTaskAssignees } from './assignees'
 
+const TASK_SELECT = `
+  *,
+  creator:profiles!created_by(id, full_name, avatar_url),
+  column:project_columns!column_id(id, name, slug),
+  task_tags(
+    tag:project_tags!tag_id(id, name, slug, color)
+  ),
+  task_assignees(
+    assignee:profiles!assignee_id(id, full_name, avatar_url)
+  ),
+  comments(count),
+  attachments(count)
+`
+
+function flattenTaskRow(row: Record<string, unknown>): TaskWithRelations {
+  const { task_tags, task_assignees, comments, attachments, ...rest } = row
+  const tags = Array.isArray(task_tags)
+    ? (task_tags as { tag: unknown }[]).map((tt) => tt.tag).filter(Boolean)
+    : []
+  const assignees = Array.isArray(task_assignees)
+    ? (task_assignees as { assignee: unknown }[]).map((ta) => ta.assignee).filter(Boolean)
+    : []
+  const comment_count = Array.isArray(comments) ? (comments[0] as { count: number })?.count ?? 0 : 0
+  const attachment_count = Array.isArray(attachments) ? (attachments[0] as { count: number })?.count ?? 0 : 0
+  return { ...rest, tags, assignees, comment_count, attachment_count } as TaskWithRelations
+}
+
 export async function fetchTasks(
   projectId: string,
   filters?: {
@@ -19,21 +46,7 @@ export async function fetchTasks(
 ): Promise<TaskWithRelations[]> {
   let query = supabase
     .from('tasks')
-    .select(
-      `
-      *,
-      creator:profiles!created_by(id, full_name, avatar_url),
-      column:project_columns!column_id(id, name, slug),
-      task_tags(
-        tag:project_tags!tag_id(id, name, slug, color)
-      ),
-      task_assignees(
-        assignee:profiles!assignee_id(id, full_name, avatar_url)
-      ),
-      comments(count),
-      attachments(count)
-    `
-    )
+    .select(TASK_SELECT)
     .eq('project_id', projectId)
     .order('position', { ascending: true })
 
@@ -59,23 +72,7 @@ export async function fetchTasks(
   const { data, error } = await query
   if (error) throw error
 
-  // Flatten nested task_tags → tags, task_assignees → assignees + extract counts
-  const tasks = (data ?? []).map((row) => {
-    const { task_tags, task_assignees, comments, attachments, ...rest } = row as Record<string, unknown>
-    const tags = Array.isArray(task_tags)
-      ? (task_tags as { tag: unknown }[])
-          .map((tt) => tt.tag)
-          .filter(Boolean)
-      : []
-    const assignees = Array.isArray(task_assignees)
-      ? (task_assignees as { assignee: unknown }[])
-          .map((ta) => ta.assignee)
-          .filter(Boolean)
-      : []
-    const comment_count = Array.isArray(comments) ? (comments[0] as { count: number })?.count ?? 0 : 0
-    const attachment_count = Array.isArray(attachments) ? (attachments[0] as { count: number })?.count ?? 0 : 0
-    return { ...rest, tags, assignees, comment_count, attachment_count } as TaskWithRelations
-  })
+  const tasks = (data ?? []).map((row) => flattenTaskRow(row as Record<string, unknown>))
 
   // Client-side filter by tag slug if needed
   if (filters?.tagSlug) {
@@ -92,38 +89,55 @@ export async function fetchTask(
 ): Promise<TaskWithRelations> {
   const { data, error } = await supabase
     .from('tasks')
-    .select(
-      `
-      *,
-      creator:profiles!created_by(id, full_name, avatar_url),
-      column:project_columns!column_id(id, name, slug),
-      task_tags(
-        tag:project_tags!tag_id(id, name, slug, color)
-      ),
-      task_assignees(
-        assignee:profiles!assignee_id(id, full_name, avatar_url)
-      ),
-      comments(count),
-      attachments(count)
-    `
-    )
+    .select(TASK_SELECT)
     .eq('id', taskId)
     .single()
 
   if (error) throw error
+  return flattenTaskRow(data as Record<string, unknown>)
+}
 
-  // Flatten nested task_tags → tags, task_assignees → assignees + extract counts
-  const { task_tags, task_assignees, comments, attachments, ...rest } = data as Record<string, unknown>
-  const tags = Array.isArray(task_tags)
-    ? (task_tags as { tag: unknown }[]).map((tt) => tt.tag).filter(Boolean)
-    : []
-  const assignees = Array.isArray(task_assignees)
-    ? (task_assignees as { assignee: unknown }[]).map((ta) => ta.assignee).filter(Boolean)
-    : []
-  const comment_count = Array.isArray(comments) ? (comments[0] as { count: number })?.count ?? 0 : 0
-  const attachment_count = Array.isArray(attachments) ? (attachments[0] as { count: number })?.count ?? 0 : 0
+export const ARCHIVED_PAGE_SIZE = 30
 
-  return { ...rest, tags, assignees, comment_count, attachment_count } as TaskWithRelations
+export async function fetchArchivedTasks(
+  projectId: string,
+  filters: {
+    search?: string
+    sprintId?: string | null
+  },
+  page: number
+): Promise<{ data: TaskWithRelations[]; hasMore: boolean }> {
+  const from = page * ARCHIVED_PAGE_SIZE
+  const to = from + ARCHIVED_PAGE_SIZE // fetch one extra to detect hasMore
+
+  let query = supabase
+    .from('tasks')
+    .select(TASK_SELECT)
+    .eq('project_id', projectId)
+    .eq('archived', true)
+    .order('archived_at', { ascending: false })
+    .range(from, to)
+
+  if (filters.search?.trim()) {
+    query = query.ilike('title', `%${filters.search.trim()}%`)
+  }
+
+  if (filters.sprintId !== undefined) {
+    if (filters.sprintId === null) {
+      query = query.is('sprint_id', null)
+    } else {
+      query = query.eq('sprint_id', filters.sprintId)
+    }
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+
+  const rows = (data ?? []).map((row) => flattenTaskRow(row as Record<string, unknown>))
+  const hasMore = rows.length > ARCHIVED_PAGE_SIZE
+  if (hasMore) rows.pop()
+
+  return { data: rows, hasMore }
 }
 
 export async function createTask(

@@ -7,8 +7,11 @@ import {
   ArrowLeft,
   FolderKanban,
   Timer,
+  UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/contexts/AuthContext'
+import { usePendingInviteCount } from '@/hooks/useInvites'
 
 interface SidebarProps {
   collapsed: boolean
@@ -19,6 +22,8 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
   const router = useRouterState()
   const currentPath = router.location.pathname
+  const { user } = useAuth()
+  const inviteCount = usePendingInviteCount(user?.id)
 
   const projectNav = projectSlug
     ? [
@@ -91,18 +96,46 @@ export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
           </>
         ) : (
           /* Projects list view — minimal nav */
-          <Link
-            to="/projects"
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              currentPath === '/projects'
-                ? 'bg-primary/10 text-primary font-medium'
-                : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-            )}
-          >
-            <FolderKanban className="h-4 w-4 shrink-0" />
-            {!collapsed && <span>Projects</span>}
-          </Link>
+          <>
+            <Link
+              to="/projects"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                currentPath === '/projects'
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+              )}
+            >
+              <FolderKanban className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>Projects</span>}
+            </Link>
+            <Link
+              to="/invites"
+              className={cn(
+                'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                currentPath === '/invites'
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+              )}
+            >
+              <UserPlus className="h-4 w-4 shrink-0" />
+              {!collapsed && (
+                <span className="flex items-center gap-2">
+                  Invites
+                  {inviteCount > 0 && (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                      {inviteCount}
+                    </span>
+                  )}
+                </span>
+              )}
+              {collapsed && inviteCount > 0 && (
+                <span className="absolute left-8 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold text-primary-foreground">
+                  {inviteCount}
+                </span>
+              )}
+            </Link>
+          </>
         )}
       </nav>
     </aside>

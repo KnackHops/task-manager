@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Timer } from 'lucide-react'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import { useSprints } from '@/hooks/useSprints'
 import {
@@ -56,8 +57,27 @@ function SprintAnalyticsPage() {
 
   if (sprintsLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+          <Skeleton className="h-5 w-32" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="h-56 w-full" />
+        </div>
+        <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="h-56 w-full" />
+        </div>
       </div>
     )
   }
@@ -103,19 +123,35 @@ function SprintAnalyticsPage() {
         <SprintSummaryCard sprint={currentSprint} summary={summary} />
       )}
       {summaryLoading && (
-        <div className="rounded-xl border border-border bg-card p-5 animate-pulse h-40" />
+        <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+          <Skeleton className="h-5 w-32" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Burndown */}
       {burndown && burndown.length > 0 && <BurndownChart data={burndown} />}
       {burndownLoading && (
-        <div className="rounded-xl border border-border bg-card p-5 animate-pulse h-72" />
+        <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="h-56 w-full" />
+        </div>
       )}
 
       {/* Velocity */}
       {velocity && <VelocityChart data={velocity} />}
       {velocityLoading && (
-        <div className="rounded-xl border border-border bg-card p-5 animate-pulse h-72" />
+        <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="h-56 w-full" />
+        </div>
       )}
     </div>
   )

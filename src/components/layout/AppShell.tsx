@@ -46,7 +46,7 @@ export function AppShell({ children, projectSlug }: AppShellProps) {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setMobileOpen(true)} projectSlug={projectSlug} />
-        <main className="flex-1 overflow-hidden p-6">{children}</main>
+        <main className="flex-1 overflow-hidden p-3 sm:p-6">{children}</main>
       </div>
     </div>
   )

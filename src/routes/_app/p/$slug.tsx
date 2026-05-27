@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, useNavigate, Link, type ErrorComponentProps } 
 import { useProject } from '@/hooks/useProjects'
 import { ProjectProvider } from '@/contexts/ProjectContext'
 import { AppShell } from '@/components/layout/AppShell'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { AlertTriangle } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/p/$slug')({
@@ -17,8 +18,25 @@ function ProjectLayout() {
   if (isLoading) {
     return (
       <AppShell projectSlug={slug}>
-        <div className="flex items-center justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="flex h-full gap-4 overflow-hidden pb-4">
+          {Array.from({ length: 4 }).map((_, col) => (
+            <div key={col} className="flex w-64 shrink-0 flex-col gap-3">
+              <div className="flex items-center justify-between px-1">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-6 rounded-full" />
+              </div>
+              {Array.from({ length: 3 - col % 2 }).map((_, card) => (
+                <div key={card} className="rounded-lg border border-border bg-card p-3 space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-5 w-12 rounded-full" />
+                    <Skeleton className="h-5 w-14 rounded-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       </AppShell>
     )

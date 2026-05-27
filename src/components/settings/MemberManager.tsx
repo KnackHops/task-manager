@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, Trash2, Shield, ShieldCheck } from 'lucide-react'
+import { Plus, Trash2, Shield, ShieldCheck, Clock } from 'lucide-react'
 import {
   useMembers,
   useInviteMember,
@@ -27,7 +27,7 @@ const PERMISSION_LABELS: { key: keyof MemberPermissions; label: string }[] = [
 ]
 
 export function MemberManager({ projectId, isOwner }: MemberManagerProps) {
-  const { data: members } = useMembers(projectId)
+  const { data: members } = useMembers(projectId, ['active', 'pending'])
   const inviteMember = useInviteMember(projectId)
   const updatePermissions = useUpdatePermissions(projectId)
   const removeMember = useRemoveMember(projectId)
@@ -43,7 +43,7 @@ export function MemberManager({ projectId, isOwner }: MemberManagerProps) {
       { email: inviteEmail.trim() },
       {
         onSuccess: () => {
-          toast.success('Member added')
+          toast.success('Invite sent')
           setInviteEmail('')
           setShowInvite(false)
         },
@@ -136,7 +136,12 @@ export function MemberManager({ projectId, isOwner }: MemberManagerProps) {
                   <span className="text-sm font-medium text-foreground truncate">
                     {member.profile.full_name}
                   </span>
-                  {member.role === 'owner' ? (
+                  {member.status === 'pending' ? (
+                    <span className="flex items-center gap-1 shrink-0 rounded-full bg-yellow-500/15 px-2 py-0.5 text-[10px] font-semibold text-yellow-600 dark:text-yellow-400">
+                      <Clock className="h-3 w-3" />
+                      Pending
+                    </span>
+                  ) : member.role === 'owner' ? (
                     <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
                   ) : (
                     <Shield className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -156,7 +161,7 @@ export function MemberManager({ projectId, isOwner }: MemberManagerProps) {
               )}
             </div>
 
-            {member.role !== 'owner' && isOwner && (
+            {member.role !== 'owner' && isOwner && member.status === 'active' && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {PERMISSION_LABELS.map(({ key, label }) => (
                   <button

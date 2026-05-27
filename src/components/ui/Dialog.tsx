@@ -38,7 +38,7 @@ export function Dialog({ open, onClose, children, className }: DialogProps) {
     >
       <div
         className={cn(
-          'relative w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-xl',
+          'relative w-full max-w-[calc(100vw-2rem)] sm:max-w-lg mx-4 sm:mx-auto rounded-lg border border-border bg-card p-4 sm:p-6 shadow-xl',
           className
         )}
       >

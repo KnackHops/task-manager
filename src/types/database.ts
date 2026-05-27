@@ -2,7 +2,8 @@
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
 export type ProjectMemberRole = 'owner' | 'member'
 export type SprintStatus = 'planning' | 'active' | 'completed'
-export type NotificationType = 'comment' | 'mention' | 'assignment'
+export type NotificationType = 'comment' | 'mention' | 'assignment' | 'invite'
+export type MemberStatus = 'pending' | 'active'
 
 // Legacy — kept on profiles table but no longer used for authorization
 export type UserRole = 'client' | 'developer' | 'admin'
@@ -53,6 +54,8 @@ export interface ProjectMember {
   project_id: string
   user_id: string
   role: ProjectMemberRole
+  status: MemberStatus
+  invited_by: string | null
   can_create_task: boolean
   can_edit_task: boolean
   can_delete_task: boolean
@@ -66,6 +69,11 @@ export interface ProjectMember {
 
 export interface ProjectMemberWithProfile extends ProjectMember {
   profile: Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url'>
+}
+
+export interface PendingInvite extends ProjectMember {
+  project: Pick<Project, 'id' | 'name' | 'slug'>
+  inviter: Pick<Profile, 'id' | 'full_name' | 'avatar_url'> | null
 }
 
 export interface ProjectTag {
@@ -137,12 +145,13 @@ export interface Notification {
   id: string
   user_id: string
   type: NotificationType
-  task_id: string
+  task_id: string | null
   comment_id: string | null
   actor_id: string
   message: string
   is_read: boolean
   project_slug: string
+  project_member_id: string | null
   created_at: string
 }
 

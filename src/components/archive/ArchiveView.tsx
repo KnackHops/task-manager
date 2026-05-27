@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
-import { ArchiveRestore, ChevronDown, Search, X } from "lucide-react";
-import { useTasks, useUnarchiveTask } from "@/hooks/useTasks";
+import { ArchiveRestore, ChevronDown, Loader2, Search, X } from "lucide-react";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useArchivedTasks, useUnarchiveTask } from "@/hooks/useTasks";
 import { useSprints } from "@/hooks/useSprints";
 import { useProjectContext } from "@/contexts/ProjectContext";
 import { PriorityBadge, TagBadge, TAG_COLOR_MAP } from "@/components/ui/Badge";
@@ -23,14 +24,30 @@ export function ArchiveView({ projectId }: ArchiveViewProps) {
       ? null
       : sprintFilter;
 
-  const { data: tasks, isLoading } = useTasks(projectId, {
-    archived: true,
+  // Debounced search
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const filters = useMemo(() => ({
+    search: debouncedSearch || undefined,
     ...(sprintIdFilter !== undefined ? { sprintId: sprintIdFilter } : {}),
-  });
+  }), [debouncedSearch, sprintIdFilter]);
+
+  const {
+    data,
+    isLoading,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useArchivedTasks(projectId, filters);
   const unarchiveTask = useUnarchiveTask(projectId);
 
   const [restoreColumnId, setRestoreColumnId] = useState<Record<string, string>>({});
-  const [search, setSearch] = useState("");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   const toggleTag = (tagId: string) => {
@@ -39,23 +56,18 @@ export function ArchiveView({ projectId }: ArchiveViewProps) {
     );
   };
 
+  const allTasks = useMemo(
+    () => data?.pages.flatMap((p) => p.data) ?? [],
+    [data]
+  );
+
+  // Tag filtering stays client-side (join-based, can't easily filter server-side)
   const filteredTasks = useMemo(() => {
-    if (!tasks) return [];
-    let result = tasks;
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter((t) => t.title.toLowerCase().includes(q));
-    }
-
-    if (selectedTagIds.length > 0) {
-      result = result.filter((t) =>
-        t.tags?.some((tag) => selectedTagIds.includes(tag.id))
-      );
-    }
-
-    return result;
-  }, [tasks, search, selectedTagIds]);
+    if (selectedTagIds.length === 0) return allTasks;
+    return allTasks.filter((t) =>
+      t.tags?.some((tag) => selectedTagIds.includes(tag.id))
+    );
+  }, [allTasks, selectedTagIds]);
 
   const handleUnarchive = (taskId: string, originalColumnId: string) => {
     const columnId = restoreColumnId[taskId] || originalColumnId || columns[0]?.id;
@@ -72,13 +84,33 @@ export function ArchiveView({ projectId }: ArchiveViewProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <Skeleton className="h-10 flex-1" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4 rounded-lg border border-border bg-card px-4 py-3">
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-3 w-12" />
+                <Skeleton className="h-4 w-48" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-5 w-14 rounded-full" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+            </div>
+            <Skeleton className="h-5 w-5 rounded-full" />
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-7 w-20 rounded-md" />
+          </div>
+        ))}
       </div>
     );
   }
 
-  if (!tasks?.length) {
+  if (allTasks.length === 0 && !debouncedSearch && sprintFilter === "all") {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
         <p className="text-sm">No archived tasks</p>
@@ -185,7 +217,7 @@ export function ArchiveView({ projectId }: ArchiveViewProps) {
       ) : (
         <div className="space-y-2">
           {filteredTasks.map((task) => (
-            <div key={task.id} className="flex items-center gap-4 rounded-lg border border-border bg-card px-4 py-3">
+            <div key={task.id} className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-4 py-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   {project.prefix && (
@@ -259,6 +291,26 @@ export function ArchiveView({ projectId }: ArchiveViewProps) {
               )}
             </div>
           ))}
+
+          {/* Load More */}
+          {hasNextPage && (
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  "Load more"
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Trash2, Archive, ArchiveRestore, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import { Dialog, DialogHeader, DialogTitle } from '@/components/ui/Dialog'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Select } from '@/components/ui/Select'
 import { TagSelect } from '@/components/ui/TagSelect'
@@ -157,9 +158,38 @@ export function TaskDetailPanel({
   // Early return for loading state — all hooks are above this
   if (isLoading || !task) {
     return (
-      <Dialog open onClose={onClose} className="max-w-3xl">
-        <div className="flex items-center justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <Dialog open onClose={onClose} className="max-w-[calc(100vw-2rem)] sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center gap-2 pr-8">
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="h-5 w-48" />
+          </div>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Skeleton className="h-3 w-20 mb-2" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+          <div>
+            <Skeleton className="h-3 w-20 mb-2" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div className="flex items-center gap-4 border-t border-border pt-3">
+            <Skeleton className="h-5 w-5 rounded-full" />
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+          <div className="border-t border-border pt-3">
+            <Skeleton className="h-4 w-16" />
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </Dialog>
     )
@@ -308,7 +338,7 @@ export function TaskDetailPanel({
   const descSegments = task.description ? parseBody(task.description) : null
 
   return (
-    <Dialog open onClose={onClose} className="max-w-3xl max-h-[85vh] overflow-y-auto">
+    <Dialog open onClose={onClose} className="max-w-[calc(100vw-2rem)] sm:max-w-3xl max-h-[85vh] overflow-y-auto">
       <DialogHeader>
         <div className="flex items-center gap-2 pr-8">
           {project.prefix && (
@@ -450,7 +480,7 @@ export function TaskDetailPanel({
           </button>
           {detailsOpen && (
             <div className="mt-3 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Select
                   id="detail-column"
                   label="Column"

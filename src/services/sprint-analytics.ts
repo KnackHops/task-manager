@@ -155,26 +155,33 @@ export async function fetchVelocity(
 
   const doneColumnIds = doneCols?.map((c) => c.id) ?? []
 
-  const entries: VelocityEntry[] = []
+  // Batch fetch all tasks for all completed sprints in one query
+  const sprintIds = sprints.map((s) => s.id)
+  const { data: allTasks, error: tasksError } = await supabase
+    .from('tasks')
+    .select('sprint_id, column_id, story_points, archived, is_done')
+    .in('sprint_id', sprintIds)
 
-  for (const sprint of sprints) {
-    const { data: tasks } = await supabase
-      .from('tasks')
-      .select('id, column_id, story_points, archived, is_done')
-      .eq('sprint_id', sprint.id)
+  if (tasksError) throw tasksError
 
-    const all = tasks ?? []
-    const done = all.filter(
+  // Group tasks by sprint_id
+  const tasksBySprint = new Map<string, typeof allTasks>()
+  for (const task of allTasks ?? []) {
+    const list = tasksBySprint.get(task.sprint_id) ?? []
+    list.push(task)
+    tasksBySprint.set(task.sprint_id, list)
+  }
+
+  return sprints.map((sprint) => {
+    const tasks = tasksBySprint.get(sprint.id) ?? []
+    const done = tasks.filter(
       (t) => doneColumnIds.includes(t.column_id) || t.archived || t.is_done
     )
-
-    entries.push({
+    return {
       sprintId: sprint.id,
       sprintName: sprint.name,
       completedTasks: done.length,
       completedPoints: done.reduce((s, t) => s + (t.story_points ?? 0), 0),
-    })
-  }
-
-  return entries
+    }
+  })
 }

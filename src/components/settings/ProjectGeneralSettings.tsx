@@ -89,7 +89,7 @@ export function ProjectGeneralSettings() {
             onChange={(e) => setPrefix(e.target.value.toUpperCase())}
             placeholder="e.g. NT"
             maxLength={6}
-            className="w-32 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground font-mono"
+            className="w-full sm:w-32 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground font-mono"
           />
           <p className="text-xs text-muted-foreground mt-1">
             Tasks will display as {prefix ? `${prefix}-1` : '—'}
@@ -104,7 +104,7 @@ export function ProjectGeneralSettings() {
           <select
             value={defaultColumnId}
             onChange={(e) => setDefaultColumnId(e.target.value)}
-            className="w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+            className="w-full sm:w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
           >
             <option value="">None (first column)</option>
             {columns.map((col) => (
@@ -129,7 +129,7 @@ export function ProjectGeneralSettings() {
               setSprintColumnId(e.target.value)
               if (!e.target.value) setAutoAssignSprint(false)
             }}
-            className="w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+            className="w-full sm:w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
           >
             <option value="">None</option>
             {columns.map((col) => (
@@ -170,7 +170,7 @@ export function ProjectGeneralSettings() {
           <select
             value={completedColumnId}
             onChange={(e) => setCompletedColumnId(e.target.value)}
-            className="w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+            className="w-full sm:w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
           >
             <option value="">None</option>
             {columns.map((col) => (

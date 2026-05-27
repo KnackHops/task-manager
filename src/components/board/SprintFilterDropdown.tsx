@@ -196,7 +196,7 @@ export const SprintFilterDropdown = forwardRef<SprintFilterDropdownHandle, Sprin
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-lg border border-border bg-card shadow-lg p-1">
+        <div className="absolute left-0 top-full mt-1 z-50 w-[calc(100vw-3rem)] sm:w-64 rounded-lg border border-border bg-card shadow-lg p-1">
           {/* Fixed options */}
           <button
             onClick={() => handleSelect('all')}

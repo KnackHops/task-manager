@@ -560,10 +560,11 @@ search_tasks project=nonstop query="email template"   → search by text
 ## PHASE 14: POLISH ✅ PARTIAL
 
 - [x] Error boundaries — root (`errorComponent` + `notFoundComponent`), app layout, project layout. TanStack Router error cascade with recovery UI.
-- [ ] Loading skeletons
+- [x] Loading skeletons
+- [x] Dark mode / light mode toggle
 - [ ] Keyboard shortcuts
-- [ ] Mobile responsive board
-- [ ] Pagination / virtualization
+- [x] Mobile responsive board
+- [x] Pagination / virtualization
 - [ ] Security audit
 - [ ] MCP `read_attachment` tool — auto-download + extract zip attachments (prototypes), return file tree + contents to agent in one call. Eliminates manual download/extract/read workflow
 - [ ] MCP Streamable HTTP transport — convert stdio → Streamable HTTP, deploy as service on Coolify, API key auth. Frontend UI for generating/managing API keys per user. Devs just add a URL to MCP config, no local build needed
@@ -690,7 +691,62 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
-## PHASE 14.5: PENDING INVITES + AUTH EMAIL FIX (OPTIONAL) — TODO
+## PHASE 14.4: PROFILE SETTINGS — TODO
+
+> User profile settings page — edit display name, avatar, email preferences, theme.
+
+- [ ] Profile settings route + page component
+- [ ] Edit display name (update `profiles` table)
+- [ ] Avatar upload/change (Supabase Storage)
+- [ ] Email notification preferences
+- [ ] Account info display (email, member since)
+
+---
+
+## PHASE 14.5: LOADING SKELETONS, DARK MODE, MOBILE, PAGINATION ✅ COMPLETE
+
+### 14.5.1 Loading Skeletons
+- [x] `src/components/ui/Skeleton.tsx` — base `animate-pulse` component
+- [x] `BoardContainer.tsx` — 4-column board skeleton with card placeholders
+- [x] `projects.tsx` — 6 project card grid skeleton
+- [x] `TaskDetailPanel.tsx` — full dialog layout skeleton
+- [x] `$slug.tsx` — board skeleton while project loads
+- [x] `sprints.tsx` — sprint selector + summary + charts skeletons
+- [x] `ArchiveView.tsx` — search bar + 6 task item row skeletons
+- [x] Only replaced `isLoading` spinners, NOT `isPending` mutation spinners
+
+### 14.5.2 Dark/Light Mode Toggle Fix
+- [x] Moved `class="dark"` from `<body>` to `<html>` in `index.html`
+- [x] `lib/theme.ts` manipulates `document.documentElement` — now matches
+- [x] Header toggle (Sun/Moon icons) already fully implemented, just wasn't working
+
+### 14.5.3 Mobile Responsiveness
+- [x] `Dialog.tsx` — `max-w-[calc(100vw-2rem)] sm:max-w-lg`, `mx-4 sm:mx-auto`
+- [x] `TaskDetailPanel.tsx` — responsive dialog + `grid-cols-1 sm:grid-cols-2`
+- [x] `ProjectGeneralSettings.tsx` — `w-full sm:w-48`, `w-full sm:w-32`
+- [x] `ProjectSwitcher.tsx` — `w-[calc(100vw-3rem)] sm:w-64`
+- [x] `NotificationDropdown.tsx` — `w-[calc(100vw-2rem)] sm:w-80`
+- [x] `SprintFilterDropdown.tsx` — `w-[calc(100vw-3rem)] sm:w-64`
+- [x] `SprintSummaryCard.tsx` — `flex-col sm:flex-row`, `flex-wrap`
+- [x] `AppShell.tsx` — `p-3 sm:p-6`
+- [x] `sprints.tsx` — `grid-cols-2 sm:grid-cols-4`
+- [x] Board horizontal scroll kept as-is (standard kanban mobile UX)
+
+### 14.5.4 Pagination & Query Optimization
+- [x] Archive — `useInfiniteQuery` + offset pagination (30/page), server-side search, "Load more" button
+- [x] Notifications — cursor-based `useInfiniteQuery` (20/batch), "Load older" button
+- [x] Comments — cursor-based `useInfiniteQuery` (30/batch), "Load earlier" at top
+- [x] Velocity N+1 fix — single `.in()` batch query (N+2 → 3 queries)
+- [x] Projects N+1 fix — batch member/task counts (2N+1 → 3 queries)
+- [x] Deleted unused `fetchProfiles`/`useProfiles` (dead code, global table scan)
+- [x] Extracted `TASK_SELECT` constant + `flattenTaskRow` helper in `tasks.ts`
+
+### 14.5.5 Build Verification
+- [x] `npm run build` — passes clean (tsc + vite)
+
+---
+
+## PHASE 14.7: PENDING INVITES + AUTH EMAIL FIX (OPTIONAL) — TODO
 
 > Allow inviting users who haven't signed up yet. They receive an email, and on registration are auto-added to the project.
 

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchNotifications,
   fetchUnreadCount,
@@ -14,9 +14,14 @@ export const notificationKeys = {
 }
 
 export function useNotifications(userId: string | undefined) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: notificationKeys.all,
-    queryFn: () => fetchNotifications(userId!),
+    queryFn: ({ pageParam }) => fetchNotifications(userId!, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.hasMore || lastPage.data.length === 0) return undefined
+      return lastPage.data[lastPage.data.length - 1]!.created_at
+    },
     enabled: !!userId,
   })
 }

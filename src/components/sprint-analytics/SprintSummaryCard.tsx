@@ -38,7 +38,7 @@ export function SprintSummaryCard({ sprint, summary }: SprintSummaryCardProps) {
 
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
         <div>
           <h3 className="text-lg font-semibold text-foreground">
             {sprint.name}
@@ -109,7 +109,7 @@ export function SprintSummaryCard({ sprint, summary }: SprintSummaryCardProps) {
       </div>
 
       {/* Priority breakdown */}
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         {PRIORITY_ORDER.map((p) => {
           const data = summary.tasksByPriority[p]
           if (!data || data.total === 0) return null

@@ -25,34 +25,46 @@ export async function fetchMyProjects(
 
   if (error) throw error
 
-  // Shape into ProjectListItem
-  const items: ProjectListItem[] = []
-  for (const row of data ?? []) {
-    const project = row.project as unknown as Project
-    const membership = { ...row, project: undefined } as ProjectMember
+  const rows = data ?? []
+  if (rows.length === 0) return []
 
-    // Get member count
-    const { count } = await supabase
-      .from('project_members')
-      .select('*', { count: 'exact', head: true })
-      .eq('project_id', project.id)
+  const projectIds = rows.map(
+    (r) => (r.project as unknown as Project).id
+  )
 
-    // Get task count
-    const { count: taskCount } = await supabase
-      .from('tasks')
-      .select('*', { count: 'exact', head: true })
-      .eq('project_id', project.id)
-      .eq('archived', false)
+  // Batch member counts: fetch all member rows, group in JS
+  const { data: memberRows } = await supabase
+    .from('project_members')
+    .select('project_id')
+    .in('project_id', projectIds)
 
-    items.push({
-      ...project,
-      membership,
-      member_count: count ?? 0,
-      task_count: taskCount ?? 0,
-    })
+  const memberCounts = new Map<string, number>()
+  for (const m of memberRows ?? []) {
+    memberCounts.set(m.project_id, (memberCounts.get(m.project_id) ?? 0) + 1)
   }
 
-  return items
+  // Batch task counts: fetch all non-archived task project_ids, group in JS
+  const { data: taskRows } = await supabase
+    .from('tasks')
+    .select('project_id')
+    .in('project_id', projectIds)
+    .eq('archived', false)
+
+  const taskCounts = new Map<string, number>()
+  for (const t of taskRows ?? []) {
+    taskCounts.set(t.project_id, (taskCounts.get(t.project_id) ?? 0) + 1)
+  }
+
+  return rows.map((row) => {
+    const project = row.project as unknown as Project
+    const membership = { ...row, project: undefined } as ProjectMember
+    return {
+      ...project,
+      membership,
+      member_count: memberCounts.get(project.id) ?? 0,
+      task_count: taskCounts.get(project.id) ?? 0,
+    } as ProjectListItem
+  })
 }
 
 export async function fetchProjectBySlug(

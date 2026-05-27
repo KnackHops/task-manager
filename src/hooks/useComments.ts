@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchComments,
   createComment,
@@ -40,9 +40,15 @@ export function useComments(taskId: string | undefined) {
     }
   }, [taskId, queryClient])
 
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: commentKeys.all(taskId ?? ''),
-    queryFn: () => fetchComments(taskId!),
+    queryFn: ({ pageParam }) => fetchComments(taskId!, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.hasMore || lastPage.data.length === 0) return undefined
+      // Cursor = oldest comment's created_at in this page (first item, since reversed)
+      return lastPage.data[0]!.created_at
+    },
     enabled: !!taskId,
   })
 }

@@ -1,7 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchTasks,
   fetchTask,
+  fetchArchivedTasks,
   createTask,
   updateTask,
   archiveTask,
@@ -21,6 +22,10 @@ export const taskKeys = {
     projectId: string,
     filters?: { columnId?: string; archived?: boolean; tagSlug?: string; sprintId?: string | null }
   ) => ['tasks', projectId, filters] as const,
+  archived: (
+    projectId: string,
+    filters?: { search?: string; sprintId?: string | null }
+  ) => ['tasks', projectId, 'archived', filters] as const,
   detail: (taskId: string) => ['task', taskId] as const,
 }
 
@@ -45,6 +50,21 @@ export function useTask(taskId: string | undefined) {
     queryKey: taskKeys.detail(taskId ?? ''),
     queryFn: () => fetchTask(taskId!),
     enabled: !!taskId,
+  })
+}
+
+export function useArchivedTasks(
+  projectId: string | undefined,
+  filters: { search?: string; sprintId?: string | null }
+) {
+  return useInfiniteQuery({
+    queryKey: taskKeys.archived(projectId ?? '', filters),
+    queryFn: ({ pageParam = 0 }) =>
+      fetchArchivedTasks(projectId!, filters, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+      lastPage.hasMore ? lastPageParam + 1 : undefined,
+    enabled: !!projectId,
   })
 }
 
@@ -156,6 +176,7 @@ export function useArchiveTask(projectId: string) {
 
     onSettled: (_data, _err, taskId) => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all(projectId) })
+      queryClient.invalidateQueries({ queryKey: taskKeys.archived(projectId) })
       queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) })
     },
   })
@@ -204,6 +225,7 @@ export function useUnarchiveTask(projectId: string) {
 
     onSettled: (_data, _err, variables) => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all(projectId) })
+      queryClient.invalidateQueries({ queryKey: taskKeys.archived(projectId) })
       queryClient.invalidateQueries({
         queryKey: taskKeys.detail(variables.taskId),
       })

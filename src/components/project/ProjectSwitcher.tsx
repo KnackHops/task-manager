@@ -46,7 +46,7 @@ export function ProjectSwitcher({ currentSlug }: ProjectSwitcherProps) {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-lg border border-border bg-popover shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-1 w-[calc(100vw-3rem)] sm:w-64 rounded-lg border border-border bg-popover shadow-lg">
           <div className="p-2">
             <input
               value={search}

@@ -5,25 +5,33 @@ import {
   updateMemberPermissions,
   removeMember,
   toggleFavorite,
+  acceptInvite,
+  declineInvite,
 } from '@/services/members'
 import { projectKeys } from './useProjects'
+import { inviteKeys } from './useInvites'
+import { notificationKeys } from './useNotifications'
 import { useAuth } from '@/contexts/AuthContext'
-import type { MemberPermissions } from '@/types/database'
+import type { MemberPermissions, MemberStatus } from '@/types/database'
 
 export const memberKeys = {
   all: (projectId: string) => ['members', projectId] as const,
 }
 
-export function useMembers(projectId: string | undefined) {
+export function useMembers(
+  projectId: string | undefined,
+  statusFilter: MemberStatus[] = ['active']
+) {
   return useQuery({
-    queryKey: memberKeys.all(projectId ?? ''),
-    queryFn: () => fetchMembers(projectId!),
+    queryKey: [...memberKeys.all(projectId ?? ''), statusFilter],
+    queryFn: () => fetchMembers(projectId!, statusFilter),
     enabled: !!projectId,
   })
 }
 
 export function useInviteMember(projectId: string) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: ({
       email,
@@ -31,9 +39,32 @@ export function useInviteMember(projectId: string) {
     }: {
       email: string
       permissions?: MemberPermissions
-    }) => inviteMember(projectId, email, permissions),
+    }) => inviteMember(projectId, email, user!.id, permissions),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: memberKeys.all(projectId) })
+    },
+  })
+}
+
+export function useAcceptInvite() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (memberId: string) => acceptInvite(memberId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inviteKeys.all })
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all })
+      queryClient.invalidateQueries({ queryKey: projectKeys.all })
+    },
+  })
+}
+
+export function useDeclineInvite() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (memberId: string) => declineInvite(memberId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: inviteKeys.all })
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all })
     },
   })
 }

@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useComments, useUpdateComment, useDeleteComment } from '@/hooks/useComments'
 import { useMembers } from '@/hooks/useMembers'
@@ -14,7 +15,13 @@ interface CommentListProps {
 
 export function CommentList({ taskId, projectId }: CommentListProps) {
   const { user } = useAuth()
-  const { data: comments, isLoading } = useComments(taskId)
+  const {
+    data,
+    isLoading,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useComments(taskId)
   const { data: members } = useMembers(projectId)
   const { data: taskAttachments } = useTaskAttachments(taskId)
   const updateComment = useUpdateComment(taskId)
@@ -22,14 +29,23 @@ export function CommentList({ taskId, projectId }: CommentListProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevCountRef = useRef(0)
 
+  // Flatten pages: older pages first, then newest page
+  const comments = useMemo(() => {
+    if (!data?.pages) return []
+    const pages = [...data.pages]
+    // Pages are fetched newest-first, so reverse to get chronological order
+    pages.reverse()
+    return pages.flatMap((p) => p.data)
+  }, [data])
+
   // Auto-scroll to bottom on new comments
   useEffect(() => {
-    const count = comments?.length ?? 0
+    const count = comments.length
     if (count > prevCountRef.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
     prevCountRef.current = count
-  }, [comments?.length])
+  }, [comments.length])
 
   const handleEdit = (commentId: string, body: string) => {
     updateComment.mutate(
@@ -58,7 +74,22 @@ export function CommentList({ taskId, projectId }: CommentListProps) {
         ref={scrollRef}
         className="max-h-96 overflow-y-auto divide-y divide-border"
       >
-        {comments && comments.length > 0 ? (
+        {hasNextPage && (
+          <div className="flex justify-center py-2">
+            <button
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isFetchingNextPage ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                'Load earlier comments'
+              )}
+            </button>
+          </div>
+        )}
+        {comments.length > 0 ? (
           comments.map((comment) => (
             <CommentItem
               key={comment.id}

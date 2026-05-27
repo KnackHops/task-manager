@@ -1,10 +1,13 @@
 import { supabase } from '@/lib/supabase'
 import type { NotificationWithActor } from '@/types/database'
 
+const NOTIFICATION_PAGE_SIZE = 20
+
 export async function fetchNotifications(
-  userId: string
-): Promise<NotificationWithActor[]> {
-  const { data, error } = await supabase
+  userId: string,
+  cursor?: string
+): Promise<{ data: NotificationWithActor[]; hasMore: boolean }> {
+  let query = supabase
     .from('notifications')
     .select(
       `
@@ -14,10 +17,20 @@ export async function fetchNotifications(
     )
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(NOTIFICATION_PAGE_SIZE + 1)
 
+  if (cursor) {
+    query = query.lt('created_at', cursor)
+  }
+
+  const { data, error } = await query
   if (error) throw error
-  return (data ?? []) as NotificationWithActor[]
+
+  const rows = (data ?? []) as NotificationWithActor[]
+  const hasMore = rows.length > NOTIFICATION_PAGE_SIZE
+  if (hasMore) rows.pop()
+
+  return { data: rows, hasMore }
 }
 
 export async function fetchUnreadCount(userId: string): Promise<number> {
