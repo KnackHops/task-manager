@@ -38,7 +38,8 @@ notifications (user_id, type, task_id, comment_id, actor_id, message, is_read, p
 /signup                         — signup page
 /projects                       — project list (home after login)
 /p/:slug                        — project board (kanban view)
-/p/:slug/archive                — project archive view
+/p/:slug/sprints                — sprint analytics (burndown, velocity, summary)
+/p/:slug/archive                — project archive view (with sprint filter)
 /p/:slug/settings               — project settings (general, columns, tags, members)
 ```
 
@@ -546,17 +547,19 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
-## PHASE 13: DEPLOYMENT — TODO
+## PHASE 13: DEPLOYMENT ✅ PARTIAL
 
-- [ ] Dockerfile (Vite build + nginx)
-- [ ] Deploy to Coolify
-- [ ] Domain setup
+- [x] Dockerfile — multi-stage build (node:20-alpine → nginx:alpine), `@tanstack/router-cli generate` + `npm run build`, VITE_* env vars via build args
+- [x] nginx.conf — SPA fallback (`try_files`), gzip, cache headers (1y hashed assets, no-cache index.html), security headers
+- [x] .dockerignore — excludes node_modules, dist, .env*, .git, todo/, .claude/, mcp-server artifacts
+- [x] Deploy to Coolify — GitHub App source, Dockerfile build pack, env vars as build-time args, port 80
+- [ ] Domain setup (deferred — using sslip.io for now)
 
 ---
 
-## PHASE 14: POLISH — TODO
+## PHASE 14: POLISH ✅ PARTIAL
 
-- [ ] Error boundaries
+- [x] Error boundaries — root (`errorComponent` + `notFoundComponent`), app layout, project layout. TanStack Router error cascade with recovery UI.
 - [ ] Loading skeletons
 - [ ] Keyboard shortcuts
 - [ ] Mobile responsive board
@@ -567,20 +570,104 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
-## PHASE 14.1: SPRINT ANALYTICS (OPTIONAL) — TODO
+## PHASE 14.1: SPRINT ANALYTICS + DONE COLUMN + ARCHIVE SPRINT FILTER ✅ COMPLETE
 
-> Requires sprints to be in active use with story points data. Only valuable after 3+ completed sprints.
+### 14.1.1 Done Column
+- [x] Migration: `supabase/migrations/012_done_column.sql` — `is_done boolean NOT NULL DEFAULT false` on `project_columns`
+- [x] Types: `is_done: boolean` on `ProjectColumn`, `is_done?: boolean` on `UpdateColumnInput`
+- [x] `ProjectContext` — exposes `doneColumnIds: string[]`
+- [x] Board: CheckCircle icon toggle on `BoardColumn` (emerald-500 when active, managers only)
+- [x] `BoardContainer` — passes `isDone`, `onToggleDone` to each column via `useUpdateColumn`
+- [x] Settings: CheckCircle toggle per column in `ColumnManager`
 
-- [ ] Burndown chart — remaining points/tasks over sprint days vs ideal line
-- [ ] Velocity tracking — points completed per sprint, rolling average
-- [ ] Capacity planning — team availability vs velocity estimate
-- [ ] Sprint summary view — completed vs incomplete, carryover count
+### 14.1.2 Sprint Completion — Auto-Archive Done Tasks
+- [x] `completeSprint()` in `src/services/sprints.ts` — fetches done column IDs, archives tasks in done columns (sets `archived=true`, `archived_at=now()`), then moves remaining incomplete tasks (existing logic)
+
+### 14.1.3 Archive Sprint Filter
+- [x] `ArchiveView` — sprint filter dropdown (All Sprints / No Sprint / specific sprints grouped by status)
+- [x] Wired into `useTasks(projectId, { archived: true, sprintId })` — existing `fetchTasks` already supports `sprintId` filter
+
+### 14.1.4 Sprint Analytics Page
+- [x] Installed `recharts`
+- [x] `src/services/sprint-analytics.ts` — `fetchSprintSummary`, `fetchSprintBurndown`, `fetchVelocity`
+- [x] `src/hooks/useSprintAnalytics.ts` — `useSprintSummary`, `useSprintBurndown`, `useVelocity`
+- [x] `src/components/sprint-analytics/SprintSummaryCard.tsx` — tasks/points progress bars, priority breakdown, date range + days remaining
+- [x] `src/components/sprint-analytics/BurndownChart.tsx` — ideal vs actual lines (recharts LineChart), tasks/points toggle
+- [x] `src/components/sprint-analytics/VelocityChart.tsx` — bars per completed sprint + 3-sprint rolling average (recharts ComposedChart)
+- [x] `src/routes/_app/p/$slug/sprints.tsx` — sprint analytics route with sprint selector
+- [x] Sidebar: "Sprints" nav link (Timer icon) between Board and Archive
+
+### 14.1.5 Build Verification
+- [x] `npx tsc -b` — passes clean
+- [x] `npx vite build` — passes clean
 
 ---
 
-## PHASE 14.5: PENDING INVITES (OPTIONAL) — TODO
+## PHASE 14.2: TASK-LEVEL DONE, STORY POINTS TARGET, ANALYTICS + UI FIXES ✅ COMPLETE
+
+### 14.2.1 Migration
+- [x] `supabase/migrations/013_task_done_and_sprint_target.sql`
+  - `tasks.is_done boolean NOT NULL DEFAULT false` + `tasks.done_at timestamptz`
+  - `sprints.story_points_target integer`
+  - `projects.auto_archive_done boolean NOT NULL DEFAULT true`
+
+### 14.2.2 Types
+- [x] `Task`: added `is_done`, `done_at`
+- [x] `UpdateTaskInput`: added `is_done?`, `done_at?`
+- [x] `Sprint`: added `story_points_target`
+- [x] `CreateSprintInput` / `UpdateSprintInput`: added `story_points_target?`
+- [x] `Project`: added `auto_archive_done`
+- [x] `UpdateProjectInput`: added `auto_archive_done?`
+
+### 14.2.3 Task-Level Done
+- [x] `TaskDetailPanel` — "Mark as Done" / "Completed" toggle button (CheckCircle icon, green when done)
+- [x] Toggle disabled when task is in done column (must move out first)
+- [x] Moving OUT of done column does NOT auto-unset `is_done` (user toggles via panel)
+- [x] `BoardContainer` — auto-set `is_done=true` + `done_at` when dragging task into done column
+- [x] `TaskDetailPanel` column dropdown — auto-set `is_done=true` when changing to done column
+
+### 14.2.4 Story Points Target per Sprint
+- [x] `SprintManager` — SP target input next to duration picker (create + edit forms)
+- [x] Sprint row display shows target (e.g. "· 20 SP")
+- [x] `SprintSummaryCard` — progress bar denominator uses `story_points_target` when set
+
+### 14.2.5 Project General Settings — Completed Column + Auto-Archive
+- [x] `ProjectGeneralSettings` — "Completed Column" dropdown (sets `is_done` on selected column, unsets previous)
+- [x] `ProjectGeneralSettings` — "Auto-archive completed tasks on sprint completion" toggle (`auto_archive_done`)
+
+### 14.2.6 Sprint Completion — Auto-Archive Respects Toggle
+- [x] `completeSprint()` checks `project.auto_archive_done` flag
+- [x] If true: archives tasks in done columns AND task-level `is_done` tasks
+- [x] If false: skips auto-archive, just moves incomplete tasks
+
+### 14.2.7 Analytics Fixes
+- [x] `useSprintSummary` — removed `doneColumnIds.length > 0` guard (works with 0 done columns)
+- [x] Done detection in all analytics: `doneColumnIds.includes(t.column_id) || t.archived || t.is_done`
+- [x] Burndown uses `done_at` timestamp for task-level done (instead of `updated_at` approximation)
+
+### 14.2.8 Chart Visual Fixes
+- [x] `BurndownChart` — explicit hex colors (`#3b82f6` actual, `#64748b` ideal), dots on actual line (`r: 3`), custom legend
+- [x] `VelocityChart` — explicit hex colors (`#3b82f6` bars, `#f59e0b` avg line), dots on avg line, custom legend
+- [x] Replaced Recharts `<Legend>` with custom HTML legends (color indicators + labels)
+
+### 14.2.9 Done Column Toggle Visibility
+- [x] `ColumnManager` — inactive toggle changed from `text-muted-foreground/40` → `text-muted-foreground hover:text-emerald-500`
+
+### 14.2.10 CheckCircle fill-current Fix
+- [x] Removed `fill-current` from `CheckCircle` in `BoardColumn`, `ColumnManager`, `TaskDetailPanel`
+- [x] `fill-current` was making icon a solid green blob — now stroke-only, green stroke when active
+
+### 14.2.11 Build Verification
+- [x] `npm run build` — passes clean (tsc + vite)
+
+---
+
+## PHASE 14.5: PENDING INVITES + AUTH EMAIL FIX (OPTIONAL) — TODO
 
 > Allow inviting users who haven't signed up yet. They receive an email, and on registration are auto-added to the project.
+
+### Auth Email Confirmation Redirect (Blocked)
+> Confirmation emails redirect to `nonstoptravel.io` (SendGrid click tracking domain). Root cause: SendGrid click tracking wraps GoTrue's confirmation link in `url2305.nonstoptravel.io/ls/click?...` — that domain has no DNS. Code changes done (`detectSessionInUrl: true`, `emailRedirectTo: window.location.origin`), `GOTRUE_SITE_URL` updated to task-manager URL. Still broken because SendGrid click tracking rewrites the URL. Fix: disable SendGrid click tracking, or configure SendGrid branded link domain for task-manager. Requires SendGrid account access.
 
 - [ ] `pending_invites` table (id, project_id, email, permissions JSON, invited_by, created_at)
 - [ ] RLS: project members with `can_manage_members` can INSERT/SELECT/DELETE
@@ -598,11 +685,12 @@ search_tasks project=nonstop query="email template"   → search by text
 task-manager/
 ├── src/
 │   ├── components/
-│   │   ├── archive/          # ArchiveView.tsx (search, tag filter, optimistic)
+│   │   ├── archive/          # ArchiveView.tsx (search, tag filter, sprint filter, optimistic)
 │   │   ├── attachment/       # AttachmentList.tsx, AttachmentItem.tsx, FileUpload.tsx
 │   │   ├── board/            # BoardContainer.tsx, BoardColumn.tsx, TaskCard.tsx, SprintFilterDropdown.tsx, SprintTaskSelectionPanel.tsx
 │   │   ├── comment/          # CommentList.tsx, CommentForm.tsx, CommentItem.tsx, MentionDropdown.tsx
 │   │   ├── notification/     # NotificationBell.tsx, NotificationDropdown.tsx
+│   │   ├── sprint-analytics/ # SprintSummaryCard.tsx, BurndownChart.tsx, VelocityChart.tsx
 │   │   ├── task/             # CreateTaskDialog.tsx, TaskDetailPanel.tsx
 │   │   ├── project/          # CreateProjectDialog.tsx, ProjectSwitcher.tsx
 │   │   ├── settings/         # ProjectGeneralSettings.tsx, ColumnManager.tsx, TagManager.tsx, MemberManager.tsx, SprintManager.tsx
@@ -622,6 +710,7 @@ task-manager/
 │   │   ├── useComments.ts    # useComments + Realtime, CRUD mutations
 │   │   ├── useNotifications.ts # useNotifications, useUnreadCount + Realtime, mark read
 │   │   ├── useSprints.ts     # useSprints, useCreateSprint, useUpdateSprint, useDeleteSprint, useCompleteSprint
+│   │   ├── useSprintAnalytics.ts # useSprintSummary, useSprintBurndown, useVelocity
 │   │   ├── useBulkAssignSprint.ts # useBulkAssignSprint (bulk assign tasks to sprint)
 │   │   └── useProfiles.ts
 │   ├── services/
@@ -634,7 +723,8 @@ task-manager/
 │   │   ├── attachments.ts    # uploadAttachment, deleteAttachment, getSignedUrl, reorderAttachments
 │   │   ├── comments.ts       # fetchComments, createComment, updateComment, deleteComment
 │   │   ├── notifications.ts  # fetchNotifications, unreadCount, markAsRead, markAllAsRead
-│   │   ├── sprints.ts        # fetchSprints, createSprint, updateSprint, deleteSprint, completeSprint, autoAssignTasksToSprint
+│   │   ├── sprints.ts        # fetchSprints, createSprint, updateSprint, deleteSprint, completeSprint (auto-archives done), autoAssignTasksToSprint
+│   │   ├── sprint-analytics.ts # fetchSprintSummary, fetchSprintBurndown, fetchVelocity
 │   │   └── profiles.ts
 │   ├── lib/
 │   │   ├── supabase.ts       # lockAcquireTimeout fix
@@ -654,12 +744,13 @@ task-manager/
 │   │   └── _app/
 │   │       ├── route.tsx       # Auth guard
 │   │       ├── projects.tsx    # Project list
-│   │       ├── sprints.tsx     # Placeholder
+│   │       ├── sprints.tsx     # Global sprints placeholder
 │   │       └── p/
 │   │           ├── $slug.tsx       # Project layout + ProjectProvider
 │   │           └── $slug/
 │   │               ├── index.tsx   # Board view
-│   │               ├── archive.tsx # Archive view
+│   │               ├── sprints.tsx # Sprint analytics (burndown, velocity, summary)
+│   │               ├── archive.tsx # Archive view (with sprint filter)
 │   │               └── settings.tsx # Project settings
 │   ├── routeTree.gen.ts
 │   └── main.tsx
@@ -674,7 +765,10 @@ task-manager/
 │       ├── 007_task_sprint.sql
 │       ├── 008_story_points.sql
 │       ├── 009_can_manage_sprints.sql
-│       └── 010_default_sprint_duration.sql
+│       ├── 010_default_sprint_duration.sql
+│       ├── 011_sprint_auto_assign.sql
+│       ├── 012_done_column.sql
+│       └── 013_task_done_and_sprint_target.sql
 ├── .env.example
 ├── .env.local
 ├── vite.config.ts
@@ -699,15 +793,15 @@ task-manager/
 | Table | Purpose |
 |-------|---------|
 | `profiles` | User profiles (auto-created on signup) |
-| `projects` | Projects (name, slug, prefix, default_column_id, default_sprint_days, created_by) |
-| `project_columns` | Custom columns per project (name, slug, position) |
+| `projects` | Projects (name, slug, prefix, default_column_id, sprint_column_id, default_sprint_days, auto_archive_done, created_by) |
+| `project_columns` | Custom columns per project (name, slug, position, is_done) |
 | `project_members` | Membership + granular permissions (7 permission flags) |
 | `project_tags` | Custom tags per project (name, slug, color) |
-| `tasks` | Tasks (task_number, column_id, sprint_id, priority, story_points, archived, position) |
+| `tasks` | Tasks (task_number, column_id, sprint_id, priority, story_points, is_done, done_at, archived, position) |
 | `task_tags` | Many-to-many join (task ↔ tag) |
 | `task_assignees` | Many-to-many join (task ↔ profiles) |
 | `notifications` | Per-user notifications (comment, mention, assigned) |
-| `sprints` | Sprint management |
+| `sprints` | Sprint management (name, project_id, start_date, end_date, status, goal, story_points_target) |
 | `comments` | Task comments (with @mention support) |
 | `attachments` | File attachments |
 | `activity_log` | Task activity history |
@@ -727,4 +821,5 @@ task-manager/
 | Drag & Drop | @hello-pangea/dnd |
 | Icons | lucide-react |
 | Toasts | sonner |
+| Charts | recharts |
 | Dates | date-fns |

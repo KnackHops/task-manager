@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { ArchiveRestore, ChevronDown, Search, X } from "lucide-react";
 import { useTasks, useUnarchiveTask } from "@/hooks/useTasks";
+import { useSprints } from "@/hooks/useSprints";
 import { useProjectContext } from "@/contexts/ProjectContext";
 import { PriorityBadge, TagBadge, TAG_COLOR_MAP } from "@/components/ui/Badge";
 import { Avatar } from "@/components/ui/Avatar";
@@ -13,7 +14,19 @@ interface ArchiveViewProps {
 
 export function ArchiveView({ projectId }: ArchiveViewProps) {
   const { project, columns, tags: projectTags, canArchiveTask } = useProjectContext();
-  const { data: tasks, isLoading } = useTasks(projectId, { archived: true });
+  const { data: sprints } = useSprints(projectId);
+  const [sprintFilter, setSprintFilter] = useState<string>("all");
+
+  const sprintIdFilter = sprintFilter === "all"
+    ? undefined
+    : sprintFilter === "none"
+      ? null
+      : sprintFilter;
+
+  const { data: tasks, isLoading } = useTasks(projectId, {
+    archived: true,
+    ...(sprintIdFilter !== undefined ? { sprintId: sprintIdFilter } : {}),
+  });
   const unarchiveTask = useUnarchiveTask(projectId);
 
   const [restoreColumnId, setRestoreColumnId] = useState<Record<string, string>>({});
@@ -75,24 +88,61 @@ export function ArchiveView({ projectId }: ArchiveViewProps) {
 
   return (
     <div className="space-y-3">
-      {/* Search + Tag Filters */}
+      {/* Search + Sprint Filter + Tag Filters */}
       <div className="space-y-2">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search archived tasks..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-input bg-background pl-8 pr-8 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search archived tasks..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-input bg-background pl-8 pr-8 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {sprints && sprints.length > 0 && (
+            <div className="relative">
+              <select
+                value={sprintFilter}
+                onChange={(e) => setSprintFilter(e.target.value)}
+                className="appearance-none rounded-lg border border-input bg-background pl-3 pr-7 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="all">All Sprints</option>
+                <option value="none">No Sprint</option>
+                {sprints
+                  .filter((s) => s.status === "completed")
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (completed)
+                    </option>
+                  ))}
+                {sprints
+                  .filter((s) => s.status === "active")
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (active)
+                    </option>
+                  ))}
+                {sprints
+                  .filter((s) => s.status === "planning")
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (planning)
+                    </option>
+                  ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            </div>
           )}
         </div>
 

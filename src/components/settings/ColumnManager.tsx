@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, GripVertical, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Plus, GripVertical, Pencil, Trash2, Check, X, CheckCircle } from 'lucide-react'
 import {
   useColumns,
   useCreateColumn,
@@ -157,6 +157,31 @@ export function ColumnManager({ projectId, projectSlug }: ColumnManagerProps) {
                     {col.slug}
                   </span>
                 </div>
+                <button
+                  onClick={() =>
+                    updateColumn.mutate(
+                      { columnId: col.id, input: { is_done: !col.is_done } },
+                      {
+                        onSuccess: () =>
+                          toast.success(
+                            !col.is_done
+                              ? `${col.name} marked as done column`
+                              : `${col.name} unmarked as done column`
+                          ),
+                        onError: (err) => toast.error(err.message),
+                      }
+                    )
+                  }
+                  disabled={updateColumn.isPending}
+                  title={col.is_done ? 'Done column' : 'Mark as done column'}
+                  className={
+                    col.is_done
+                      ? 'text-emerald-500'
+                      : 'text-muted-foreground hover:text-emerald-500'
+                  }
+                >
+                  <CheckCircle className="h-3.5 w-3.5" />
+                </button>
                 <button
                   onClick={() => {
                     setEditingId(col.id)

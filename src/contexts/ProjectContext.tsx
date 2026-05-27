@@ -10,6 +10,7 @@ interface ProjectContextType {
   project: ProjectWithDetails
   columns: ProjectColumn[]
   tags: ProjectTag[]
+  doneColumnIds: string[]
   membership: ProjectMember
   // Permission helpers
   canCreateTask: boolean
@@ -34,10 +35,13 @@ export function ProjectProvider({
   const m = project.membership
   const isOwner = m.role === 'owner'
 
+  const doneColumnIds = project.columns.filter(c => c.is_done).map(c => c.id)
+
   const value: ProjectContextType = {
     project,
     columns: project.columns,
     tags: project.tags,
+    doneColumnIds,
     membership: m,
     canCreateTask: isOwner || m.can_create_task,
     canEditTask: isOwner || m.can_edit_task,

@@ -220,12 +220,14 @@ export function useReorderTask(projectId: string) {
       newColumnId,
       newPosition,
       sprintIdOverride,
+      isDoneOverride,
     }: {
       taskId: string
       newColumnId: string
       newPosition: number
       sprintIdOverride?: string | null
-    }) => reorderTask(taskId, newColumnId, newPosition, projectId, sprintIdOverride),
+      isDoneOverride?: { is_done: boolean; done_at: string | null }
+    }) => reorderTask(taskId, newColumnId, newPosition, projectId, sprintIdOverride, isDoneOverride),
   })
 }
 

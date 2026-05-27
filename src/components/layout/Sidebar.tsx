@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ArrowLeft,
   FolderKanban,
+  Timer,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -22,6 +23,7 @@ export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
   const projectNav = projectSlug
     ? [
         { to: `/p/${projectSlug}`, label: 'Board', icon: LayoutDashboard, exact: true },
+        { to: `/p/${projectSlug}/sprints`, label: 'Sprints', icon: Timer },
         { to: `/p/${projectSlug}/archive`, label: 'Archive', icon: Archive },
         { to: `/p/${projectSlug}/settings`, label: 'Settings', icon: Settings },
       ]

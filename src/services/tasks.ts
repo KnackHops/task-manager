@@ -222,7 +222,8 @@ export async function reorderTask(
   newColumnId: string,
   newPosition: number,
   projectId: string,
-  sprintIdOverride?: string | null
+  sprintIdOverride?: string | null,
+  isDoneOverride?: { is_done: boolean; done_at: string | null }
 ): Promise<void> {
   const { data: columnTasks, error: fetchError } = await supabase
     .from('tasks')
@@ -248,6 +249,10 @@ export async function reorderTask(
       }
       if (sprintIdOverride !== undefined) {
         updatePayload.sprint_id = sprintIdOverride
+      }
+      if (isDoneOverride !== undefined) {
+        updatePayload.is_done = isDoneOverride.is_done
+        updatePayload.done_at = isDoneOverride.done_at
       }
       updates.push(
         supabase

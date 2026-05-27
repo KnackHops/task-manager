@@ -26,6 +26,7 @@ export interface Project {
   default_column_id: string | null
   sprint_column_id: string | null
   auto_assign_sprint: boolean
+  auto_archive_done: boolean
   created_by: string | null
   route_manifest: RouteManifestEntry[]
   default_sprint_days: number
@@ -43,6 +44,7 @@ export interface ProjectColumn {
   name: string
   slug: string
   position: number
+  is_done: boolean
   created_at: string
 }
 
@@ -82,6 +84,7 @@ export interface Sprint {
   goal: string | null
   start_date: string
   end_date: string
+  story_points_target: number | null
   status: SprintStatus
   created_at: string
 }
@@ -99,6 +102,8 @@ export interface Task {
   task_number: number
   archived: boolean
   archived_at: string | null
+  is_done: boolean
+  done_at: string | null
   story_points: number | null
   route_path: string | null
   route_label: string | null
@@ -190,6 +195,8 @@ export interface UpdateTaskInput {
   position?: number
   archived?: boolean
   archived_at?: string | null
+  is_done?: boolean
+  done_at?: string | null
 }
 
 export interface CreateProjectInput {
@@ -204,6 +211,7 @@ export interface UpdateProjectInput {
   default_column_id?: string | null
   sprint_column_id?: string | null
   auto_assign_sprint?: boolean
+  auto_archive_done?: boolean
   default_sprint_days?: number
 }
 
@@ -216,6 +224,7 @@ export interface CreateColumnInput {
 export interface UpdateColumnInput {
   name?: string
   slug?: string
+  is_done?: boolean
 }
 
 export interface CreateTagInput {
@@ -235,6 +244,7 @@ export interface CreateSprintInput {
   goal?: string
   start_date: string
   end_date: string
+  story_points_target?: number | null
 }
 
 export interface UpdateSprintInput {
@@ -243,6 +253,7 @@ export interface UpdateSprintInput {
   start_date?: string
   end_date?: string
   status?: SprintStatus
+  story_points_target?: number | null
 }
 
 export interface MemberPermissions {

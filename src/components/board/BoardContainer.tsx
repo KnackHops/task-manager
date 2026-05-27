@@ -6,6 +6,7 @@ import { BoardColumn } from './BoardColumn'
 import { useTasks, useReorderTask, taskKeys } from '@/hooks/useTasks'
 import { useSprints } from '@/hooks/useSprints'
 import { useUpdateProject, projectKeys } from '@/hooks/useProjects'
+import { useUpdateColumn } from '@/hooks/useColumns'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import type { TaskWithRelations } from '@/types/database'
 
@@ -21,7 +22,7 @@ export function BoardContainer({
   onTaskClick,
 }: BoardContainerProps) {
   const queryClient = useQueryClient()
-  const { project, columns: projectColumns, canManageColumns } =
+  const { project, columns: projectColumns, doneColumnIds, canManageColumns } =
     useProjectContext()
   const { data: tasks, isLoading } = useTasks(
     projectId,
@@ -29,6 +30,7 @@ export function BoardContainer({
   )
   const reorderMutation = useReorderTask(projectId)
   const updateProject = useUpdateProject(project.slug)
+  const updateColumn = useUpdateColumn(projectId, project.slug)
   const isRefetchingProject = useIsFetching({ queryKey: projectKeys.detail(project.slug) })
   const isProjectUpdating = updateProject.isPending || isRefetchingProject > 0
   const { data: sprints } = useSprints(projectId)
@@ -106,6 +108,14 @@ export function BoardContainer({
     const sprintIdOverride =
       isMovingIntoSprintColumn && activeSprint ? activeSprint.id : undefined
 
+    // Auto-mark done when moving into a done column
+    const isMovingIntoDoneColumn =
+      doneColumnIds.includes(destination.droppableId) &&
+      !doneColumnIds.includes(source.droppableId)
+    const isDoneOverride = isMovingIntoDoneColumn
+      ? { is_done: true as const, done_at: new Date().toISOString() }
+      : undefined
+
     setPendingReorder({
       taskId: draggableId,
       fromColumnId: source.droppableId,
@@ -133,6 +143,7 @@ export function BoardContainer({
           ...draggedTask,
           column_id: destination.droppableId,
           ...(sprintIdOverride ? { sprint_id: sprintIdOverride } : {}),
+          ...(isDoneOverride ?? {}),
         }
         destTasks.splice(destination.index, 0, updatedDragged)
 
@@ -154,6 +165,7 @@ export function BoardContainer({
               column_id: destination.droppableId,
               position: newPos ?? destination.index,
               ...(sprintIdOverride ? { sprint_id: sprintIdOverride } : {}),
+              ...(isDoneOverride ?? {}),
             }
           }
           if (newPos !== undefined) return { ...t, position: newPos }
@@ -168,6 +180,7 @@ export function BoardContainer({
         newColumnId: destination.droppableId,
         newPosition: destination.index,
         sprintIdOverride,
+        isDoneOverride,
       },
       {
         onSettled: () => {
@@ -197,8 +210,9 @@ export function BoardContainer({
             onTaskClick={onTaskClick}
             isDefault={project.default_column_id === col.id}
             isSprintColumn={project.sprint_column_id === col.id}
+            isDone={col.is_done}
             canManage={canManageColumns}
-            isUpdating={isProjectUpdating}
+            isUpdating={isProjectUpdating || updateColumn.isPending}
             onSetDefault={() => {
               const newDefault =
                 project.default_column_id === col.id ? null : col.id
@@ -232,6 +246,23 @@ export function BoardContainer({
                       newSprint
                         ? `Sprint column set to ${col.name}`
                         : 'Sprint column cleared'
+                    ),
+                  onError: (err) => toast.error(err.message),
+                }
+              )
+            }}
+            onToggleDone={() => {
+              updateColumn.mutate(
+                {
+                  columnId: col.id,
+                  input: { is_done: !col.is_done },
+                },
+                {
+                  onSuccess: () =>
+                    toast.success(
+                      !col.is_done
+                        ? `${col.name} marked as done column`
+                        : `${col.name} unmarked as done column`
                     ),
                   onError: (err) => toast.error(err.message),
                 }

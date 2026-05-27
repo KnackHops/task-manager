@@ -1,5 +1,5 @@
 import { Droppable } from '@hello-pangea/dnd'
-import { Pin, Zap, Loader2 } from 'lucide-react'
+import { Pin, Zap, CheckCircle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TaskCard } from './TaskCard'
 import type { TaskWithRelations, ProjectColumn } from '@/types/database'
@@ -12,6 +12,8 @@ interface BoardColumnProps {
   onSetDefault?: () => void
   isSprintColumn?: boolean
   onSetSprintColumn?: () => void
+  isDone?: boolean
+  onToggleDone?: () => void
   canManage?: boolean
   isUpdating?: boolean
 }
@@ -24,6 +26,8 @@ export function BoardColumn({
   onSetDefault,
   isSprintColumn,
   onSetSprintColumn,
+  isDone,
+  onToggleDone,
   canManage,
   isUpdating,
 }: BoardColumnProps) {
@@ -68,6 +72,23 @@ export function BoardColumn({
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <Zap className={cn('h-3.5 w-3.5', isSprintColumn && 'fill-current')} />
+                )}
+              </button>
+              <button
+                onClick={onToggleDone}
+                disabled={isUpdating}
+                title={isDone ? 'Done column (auto-archives on sprint complete)' : 'Mark as done column'}
+                className={cn(
+                  'transition-colors disabled:opacity-50',
+                  isDone
+                    ? 'text-emerald-500'
+                    : 'text-muted-foreground/40 hover:text-muted-foreground'
+                )}
+              >
+                {isUpdating && isDone ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle className="h-3.5 w-3.5" />
                 )}
               </button>
             </>

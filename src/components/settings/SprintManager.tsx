@@ -89,11 +89,13 @@ export function SprintManager({ projectId }: SprintManagerProps) {
   const [newGoal, setNewGoal] = useState('')
   const [newStartDate, setNewStartDate] = useState('')
   const [newEndDate, setNewEndDate] = useState('')
+  const [newSpTarget, setNewSpTarget] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editGoal, setEditGoal] = useState('')
   const [editStartDate, setEditStartDate] = useState('')
   const [editEndDate, setEditEndDate] = useState('')
+  const [editSpTarget, setEditSpTarget] = useState('')
   const [completeDialogSprint, setCompleteDialogSprint] = useState<Sprint | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Sprint | null>(null)
   const [moveTarget, setMoveTarget] = useState<string>('backlog')
@@ -111,6 +113,7 @@ export function SprintManager({ projectId }: SprintManagerProps) {
         goal: newGoal.trim() || undefined,
         start_date: newStartDate,
         end_date: newEndDate,
+        story_points_target: newSpTarget ? Number(newSpTarget) : null,
       },
       {
         onSuccess: () => {
@@ -128,6 +131,7 @@ export function SprintManager({ projectId }: SprintManagerProps) {
     setNewGoal('')
     setNewStartDate('')
     setNewEndDate('')
+    setNewSpTarget('')
   }
 
   const handleUpdate = (sprintId: string) => {
@@ -140,6 +144,7 @@ export function SprintManager({ projectId }: SprintManagerProps) {
           goal: editGoal.trim() || null,
           start_date: editStartDate,
           end_date: editEndDate,
+          story_points_target: editSpTarget ? Number(editSpTarget) : null,
         },
       },
       {
@@ -218,6 +223,7 @@ export function SprintManager({ projectId }: SprintManagerProps) {
     setEditGoal(sprint.goal ?? '')
     setEditStartDate(sprint.start_date.split('T')[0]!)
     setEditEndDate(sprint.end_date.split('T')[0]!)
+    setEditSpTarget(sprint.story_points_target?.toString() ?? '')
   }
 
   const startAdding = () => {
@@ -274,6 +280,16 @@ export function SprintManager({ projectId }: SprintManagerProps) {
               />
               <Calendar className="pointer-events-none absolute right-0 h-3 w-3 text-muted-foreground" />
             </div>
+            <span className="text-muted-foreground ml-1">|</span>
+            <input
+              type="number"
+              min="0"
+              value={editSpTarget}
+              onChange={(e) => setEditSpTarget(e.target.value)}
+              placeholder="SP"
+              className="w-12 bg-transparent text-muted-foreground outline-none border-b border-input text-center"
+            />
+            <span className="text-muted-foreground">SP</span>
           </div>
         </div>
       ) : (
@@ -297,6 +313,9 @@ export function SprintManager({ projectId }: SprintManagerProps) {
             <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
               <Calendar className="h-3 w-3 text-muted-foreground" />
               {formatDate(sprint.start_date)} – {formatDate(sprint.end_date)}
+              {sprint.story_points_target != null && (
+                <span className="ml-1 text-primary/70">· {sprint.story_points_target} SP</span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -455,6 +474,16 @@ export function SprintManager({ projectId }: SprintManagerProps) {
                 />
                 <Calendar className="pointer-events-none absolute right-0 h-3 w-3 text-muted-foreground" />
               </div>
+              <span className="text-muted-foreground ml-1">|</span>
+              <input
+                type="number"
+                min="0"
+                value={newSpTarget}
+                onChange={(e) => setNewSpTarget(e.target.value)}
+                placeholder="SP"
+                className="w-12 bg-transparent text-muted-foreground outline-none border-b border-input text-center placeholder:text-muted-foreground"
+              />
+              <span className="text-muted-foreground">SP</span>
             </div>
           </div>
         )}

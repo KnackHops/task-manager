@@ -124,6 +124,23 @@ export async function completeSprint(
   sprintId: string,
   moveToSprintId?: string | null
 ): Promise<void> {
+  // Get project_id + auto_archive_done from sprint's project
+  const { data: sprint, error: sprintError } = await supabase
+    .from('sprints')
+    .select('project_id')
+    .eq('id', sprintId)
+    .single()
+
+  if (sprintError) throw sprintError
+
+  const { data: projectData } = await supabase
+    .from('projects')
+    .select('auto_archive_done')
+    .eq('id', sprint.project_id)
+    .single()
+
+  const autoArchive = projectData?.auto_archive_done ?? true
+
   // Mark sprint completed
   const { error: updateError } = await supabase
     .from('sprints')
@@ -132,7 +149,40 @@ export async function completeSprint(
 
   if (updateError) throw updateError
 
-  // Move incomplete (non-archived) tasks to target sprint or backlog
+  if (autoArchive) {
+    // Fetch done column IDs for this project
+    const { data: doneColumns } = await supabase
+      .from('project_columns')
+      .select('id')
+      .eq('project_id', sprint.project_id)
+      .eq('is_done', true)
+
+    const doneColumnIds = doneColumns?.map((c) => c.id) ?? []
+
+    // Archive tasks in done columns
+    if (doneColumnIds.length > 0) {
+      const { error: archiveError } = await supabase
+        .from('tasks')
+        .update({ archived: true, archived_at: new Date().toISOString() })
+        .eq('sprint_id', sprintId)
+        .eq('archived', false)
+        .in('column_id', doneColumnIds)
+
+      if (archiveError) throw archiveError
+    }
+
+    // Archive tasks marked as done (task-level is_done)
+    const { error: archiveDoneError } = await supabase
+      .from('tasks')
+      .update({ archived: true, archived_at: new Date().toISOString() })
+      .eq('sprint_id', sprintId)
+      .eq('archived', false)
+      .eq('is_done', true)
+
+    if (archiveDoneError) throw archiveDoneError
+  }
+
+  // Move remaining incomplete (non-archived) tasks to target sprint or backlog
   const { data: incompleteTasks } = await supabase
     .from('tasks')
     .select('id')

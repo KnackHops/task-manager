@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useUpdateProject } from '@/hooks/useProjects'
+import { useUpdateColumn } from '@/hooks/useColumns'
 import { useProjectContext } from '@/contexts/ProjectContext'
 
 export function ProjectGeneralSettings() {
-  const { project, columns } = useProjectContext()
+  const { project, columns, doneColumnIds } = useProjectContext()
   const updateProject = useUpdateProject(project.slug)
+  const updateColumn = useUpdateColumn(project.id, project.slug)
 
   const [prefix, setPrefix] = useState(project.prefix)
   const [defaultColumnId, setDefaultColumnId] = useState(
@@ -17,16 +19,42 @@ export function ProjectGeneralSettings() {
   const [autoAssignSprint, setAutoAssignSprint] = useState(
     project.auto_assign_sprint
   )
+  const [autoArchiveDone, setAutoArchiveDone] = useState(
+    project.auto_archive_done
+  )
+
+  const currentDoneColumnId = doneColumnIds.length > 0 ? doneColumnIds[0] : ''
+  const [completedColumnId, setCompletedColumnId] = useState(currentDoneColumnId)
 
   const hasChanges =
     prefix !== project.prefix ||
     (defaultColumnId || null) !== (project.default_column_id ?? null) ||
     (sprintColumnId || null) !== (project.sprint_column_id ?? null) ||
-    autoAssignSprint !== project.auto_assign_sprint
+    autoAssignSprint !== project.auto_assign_sprint ||
+    autoArchiveDone !== project.auto_archive_done ||
+    completedColumnId !== currentDoneColumnId
 
   const handleSave = () => {
     const newSprintColumnId = sprintColumnId || null
     const newAutoAssign = newSprintColumnId ? autoAssignSprint : false
+
+    // Update completed column if changed
+    if (completedColumnId !== currentDoneColumnId) {
+      // Unset previous done column
+      if (currentDoneColumnId) {
+        updateColumn.mutate(
+          { columnId: currentDoneColumnId, input: { is_done: false } },
+          { onError: (err) => toast.error(err.message) }
+        )
+      }
+      // Set new done column
+      if (completedColumnId) {
+        updateColumn.mutate(
+          { columnId: completedColumnId, input: { is_done: true } },
+          { onError: (err) => toast.error(err.message) }
+        )
+      }
+    }
 
     updateProject.mutate(
       {
@@ -36,6 +64,7 @@ export function ProjectGeneralSettings() {
           default_column_id: defaultColumnId || null,
           sprint_column_id: newSprintColumnId,
           auto_assign_sprint: newAutoAssign,
+          auto_archive_done: autoArchiveDone,
         },
       },
       {
@@ -130,6 +159,46 @@ export function ProjectGeneralSettings() {
           </label>
           <p className="text-xs text-muted-foreground mt-1 ml-5">
             All unassigned tasks in the sprint column are added when a sprint is activated
+          </p>
+        </div>
+
+        {/* Completed Column */}
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">
+            Completed Column
+          </label>
+          <select
+            value={completedColumnId}
+            onChange={(e) => setCompletedColumnId(e.target.value)}
+            className="w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+          >
+            <option value="">None</option>
+            {columns.map((col) => (
+              <option key={col.id} value={col.id}>
+                {col.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Tasks moved here will be marked as done
+          </p>
+        </div>
+
+        {/* Auto-Archive Done */}
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoArchiveDone}
+              onChange={(e) => setAutoArchiveDone(e.target.checked)}
+              className="accent-primary"
+            />
+            <span className="text-sm text-foreground">
+              Auto-archive completed tasks on sprint completion
+            </span>
+          </label>
+          <p className="text-xs text-muted-foreground mt-1 ml-5">
+            Done tasks are moved to archive when a sprint is completed
           </p>
         </div>
 
