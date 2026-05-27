@@ -202,7 +202,7 @@ export const SprintFilterDropdown = forwardRef<SprintFilterDropdownHandle, Sprin
             onClick={() => handleSelect('all')}
             className={cn(
               'flex w-full items-center rounded-md px-2 py-1.5 text-sm transition-colors',
-              (value === 'all' || value === undefined)
+              value === 'all'
                 ? 'bg-primary/10 text-primary'
                 : 'hover:bg-muted text-foreground'
             )}

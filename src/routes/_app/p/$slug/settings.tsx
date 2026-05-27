@@ -5,6 +5,8 @@ import { ColumnManager } from '@/components/settings/ColumnManager'
 import { TagManager } from '@/components/settings/TagManager'
 import { SprintManager } from '@/components/settings/SprintManager'
 import { MemberManager } from '@/components/settings/MemberManager'
+import { DangerZone } from '@/components/settings/DangerZone'
+import { useMembers } from '@/hooks/useMembers'
 
 export const Route = createFileRoute('/_app/p/$slug/settings')({
   component: ProjectSettingsPage,
@@ -13,6 +15,7 @@ export const Route = createFileRoute('/_app/p/$slug/settings')({
 function ProjectSettingsPage() {
   const { project, canManageColumns, canManageMembers, canManageSprints, isOwner } =
     useProjectContext()
+  const { data: activeMembers } = useMembers(project.id, ['active'])
 
   return (
     <div className="h-full overflow-auto">
@@ -44,12 +47,18 @@ function ProjectSettingsPage() {
           <SprintManager projectId={project.id} />
         )}
 
-        {canManageMembers && (
-          <MemberManager
-            projectId={project.id}
-            isOwner={isOwner}
-          />
-        )}
+        <MemberManager
+          projectId={project.id}
+          isOwner={isOwner}
+          canManageMembers={canManageMembers}
+        />
+
+        <DangerZone
+          projectId={project.id}
+          projectName={project.name}
+          isOwner={isOwner}
+          activeMembers={activeMembers ?? []}
+        />
       </div>
     </div>
   )

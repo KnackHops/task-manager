@@ -7,6 +7,8 @@ import {
   toggleFavorite,
   acceptInvite,
   declineInvite,
+  leaveProject,
+  transferOwnership,
 } from '@/services/members'
 import { projectKeys } from './useProjects'
 import { inviteKeys } from './useInvites'
@@ -87,10 +89,39 @@ export function useUpdatePermissions(projectId: string) {
 
 export function useRemoveMember(projectId: string) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
-    mutationFn: (memberId: string) => removeMember(memberId),
+    mutationFn: (memberId: string) => removeMember(memberId, user!.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: memberKeys.all(projectId) })
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all })
+    },
+  })
+}
+
+export function useLeaveProject(projectId: string) {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  return useMutation({
+    mutationFn: () => leaveProject(projectId, user!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.all })
+      queryClient.invalidateQueries({ queryKey: memberKeys.all(projectId) })
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all })
+    },
+  })
+}
+
+export function useTransferOwnership(projectId: string) {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  return useMutation({
+    mutationFn: (newOwnerId: string) =>
+      transferOwnership(projectId, user!.id, newOwnerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: memberKeys.all(projectId) })
+      queryClient.invalidateQueries({ queryKey: ['project'] })
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all })
     },
   })
 }

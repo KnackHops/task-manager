@@ -14,6 +14,7 @@ import type { MemberPermissions, ProjectMemberWithProfile } from '@/types/databa
 interface MemberManagerProps {
   projectId: string
   isOwner: boolean
+  canManageMembers: boolean
 }
 
 const PERMISSION_LABELS: { key: keyof MemberPermissions; label: string }[] = [
@@ -26,7 +27,7 @@ const PERMISSION_LABELS: { key: keyof MemberPermissions; label: string }[] = [
   { key: 'can_manage_sprints', label: 'Manage sprints' },
 ]
 
-export function MemberManager({ projectId, isOwner }: MemberManagerProps) {
+export function MemberManager({ projectId, isOwner, canManageMembers }: MemberManagerProps) {
   const { data: members } = useMembers(projectId, ['active', 'pending'])
   const inviteMember = useInviteMember(projectId)
   const updatePermissions = useUpdatePermissions(projectId)
@@ -78,7 +79,7 @@ export function MemberManager({ projectId, isOwner }: MemberManagerProps) {
     <div>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-foreground">Members</h3>
-        {isOwner && !showInvite && (
+        {isOwner && canManageMembers && !showInvite && (
           <button
             onClick={() => setShowInvite(true)}
             className="flex items-center gap-1 text-xs text-primary hover:underline"
@@ -151,7 +152,7 @@ export function MemberManager({ projectId, isOwner }: MemberManagerProps) {
                   {member.profile.email}
                 </p>
               </div>
-              {isOwner && member.role !== 'owner' && (
+              {isOwner && canManageMembers && member.role !== 'owner' && (
                 <button
                   onClick={() => setRemoveTarget(member)}
                   className="text-muted-foreground hover:text-destructive shrink-0"
@@ -161,7 +162,7 @@ export function MemberManager({ projectId, isOwner }: MemberManagerProps) {
               )}
             </div>
 
-            {member.role !== 'owner' && isOwner && member.status === 'active' && (
+            {member.role !== 'owner' && isOwner && canManageMembers && member.status === 'active' && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {PERMISSION_LABELS.map(({ key, label }) => (
                   <button

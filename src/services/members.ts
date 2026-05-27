@@ -149,13 +149,38 @@ export async function updateMemberPermissions(
   if (error) throw error
 }
 
-export async function removeMember(memberId: string): Promise<void> {
+export async function removeMember(memberId: string, removedBy: string): Promise<void> {
+  // Fetch member info before deleting
+  const { data: memberData } = await supabase
+    .from('project_members')
+    .select('user_id, project_id')
+    .eq('id', memberId)
+    .single()
+
   const { error } = await supabase
     .from('project_members')
     .delete()
     .eq('id', memberId)
 
   if (error) throw error
+
+  // Notify kicked member
+  if (memberData) {
+    const { data: project } = await supabase
+      .from('projects')
+      .select('name, slug')
+      .eq('id', memberData.project_id)
+      .single()
+
+    await supabase.from('notifications').insert({
+      user_id: memberData.user_id,
+      type: 'kick',
+      task_id: null,
+      actor_id: removedBy,
+      message: `You were removed from "${project?.name ?? 'a project'}"`,
+      project_slug: project?.slug ?? '',
+    })
+  }
 }
 
 export async function toggleFavorite(
@@ -170,4 +195,107 @@ export async function toggleFavorite(
     .eq('user_id', userId)
 
   if (error) throw error
+}
+
+export async function leaveProject(
+  projectId: string,
+  userId: string
+): Promise<void> {
+  const { data: member } = await supabase
+    .from('project_members')
+    .select('role')
+    .eq('project_id', projectId)
+    .eq('user_id', userId)
+    .single()
+
+  if (member?.role === 'owner')
+    throw new Error('Owners cannot leave. Transfer ownership first.')
+
+  // Fetch BEFORE deleting — RLS blocks project_members reads after removal
+  const [{ data: owner }, { data: project }, { data: leaver }] = await Promise.all([
+    supabase
+      .from('project_members')
+      .select('user_id')
+      .eq('project_id', projectId)
+      .eq('role', 'owner')
+      .single(),
+    supabase.from('projects').select('name, slug').eq('id', projectId).single(),
+    supabase.from('profiles').select('full_name').eq('id', userId).single(),
+  ])
+
+  const { error } = await supabase
+    .from('project_members')
+    .delete()
+    .eq('project_id', projectId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+
+  // Notify project owner
+  if (owner) {
+    await supabase.from('notifications').insert({
+      user_id: owner.user_id,
+      type: 'leave',
+      task_id: null,
+      actor_id: userId,
+      message: `${leaver?.full_name ?? 'A member'} left "${project?.name ?? 'a project'}"`,
+      project_slug: project?.slug ?? '',
+    })
+  }
+}
+
+export async function transferOwnership(
+  projectId: string,
+  currentOwnerId: string,
+  newOwnerId: string
+): Promise<void> {
+  // Demote current owner → member with full permissions
+  const { error: demoteError } = await supabase
+    .from('project_members')
+    .update({
+      role: 'member',
+      can_create_task: true,
+      can_edit_task: true,
+      can_delete_task: true,
+      can_archive_task: true,
+      can_manage_columns: true,
+      can_manage_members: true,
+      can_manage_sprints: true,
+    })
+    .eq('project_id', projectId)
+    .eq('user_id', currentOwnerId)
+
+  if (demoteError) throw demoteError
+
+  // Promote new owner
+  const { error: promoteError } = await supabase
+    .from('project_members')
+    .update({ role: 'owner' })
+    .eq('project_id', projectId)
+    .eq('user_id', newOwnerId)
+
+  if (promoteError) throw promoteError
+
+  // Update projects.created_by
+  const { error: projectError } = await supabase
+    .from('projects')
+    .update({ created_by: newOwnerId })
+    .eq('id', projectId)
+
+  if (projectError) throw projectError
+
+  // Notify new owner
+  const [{ data: project }, { data: actor }] = await Promise.all([
+    supabase.from('projects').select('name, slug').eq('id', projectId).single(),
+    supabase.from('profiles').select('full_name').eq('id', currentOwnerId).single(),
+  ])
+
+  await supabase.from('notifications').insert({
+    user_id: newOwnerId,
+    type: 'transfer',
+    task_id: null,
+    actor_id: currentOwnerId,
+    message: `${actor?.full_name ?? 'Someone'} transferred ownership of "${project?.name ?? 'a project'}" to you`,
+    project_slug: project?.slug ?? '',
+  })
 }

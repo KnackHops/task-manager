@@ -2,7 +2,7 @@
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
 export type ProjectMemberRole = 'owner' | 'member'
 export type SprintStatus = 'planning' | 'active' | 'completed'
-export type NotificationType = 'comment' | 'mention' | 'assignment' | 'invite'
+export type NotificationType = 'comment' | 'mention' | 'assignment' | 'invite' | 'transfer' | 'leave' | 'kick'
 export type MemberStatus = 'pending' | 'active'
 
 // Legacy — kept on profiles table but no longer used for authorization
@@ -102,7 +102,7 @@ export interface Task {
   project_id: string
   column_id: string
   sprint_id: string | null
-  created_by: string
+  created_by: string | null
   title: string
   description: string | null
   priority: TaskPriority
@@ -131,14 +131,14 @@ export interface TaskWithRelations extends Task {
 export interface Comment {
   id: string
   task_id: string
-  author_id: string
+  author_id: string | null
   body: string
   created_at: string
   updated_at: string
 }
 
 export interface CommentWithAuthor extends Comment {
-  author: Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url'>
+  author: Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url'> | null
 }
 
 export interface Notification {
@@ -147,7 +147,7 @@ export interface Notification {
   type: NotificationType
   task_id: string | null
   comment_id: string | null
-  actor_id: string
+  actor_id: string | null
   message: string
   is_read: boolean
   project_slug: string
@@ -156,14 +156,14 @@ export interface Notification {
 }
 
 export interface NotificationWithActor extends Notification {
-  actor: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
+  actor: Pick<Profile, 'id' | 'full_name' | 'avatar_url'> | null
 }
 
 export interface Attachment {
   id: string
   task_id: string | null
   comment_id: string | null
-  uploaded_by: string
+  uploaded_by: string | null
   file_name: string
   file_type: string
   file_size: number
@@ -174,7 +174,7 @@ export interface Attachment {
 }
 
 export interface AttachmentWithUploader extends Attachment {
-  uploader: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
+  uploader: Pick<Profile, 'id' | 'full_name' | 'avatar_url'> | null
 }
 
 // --------------- Input Types ---------------

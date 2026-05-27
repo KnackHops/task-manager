@@ -18,7 +18,17 @@ function ProjectLayout() {
   if (isLoading) {
     return (
       <AppShell projectSlug={slug}>
-        <div className="flex h-full gap-4 overflow-hidden pb-4">
+        <div className="flex items-center justify-between mb-4 shrink-0">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-7 w-16" />
+            <Skeleton className="h-8 w-28 rounded-md" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-9 w-28 rounded-lg" />
+            <Skeleton className="h-9 w-24 rounded-lg" />
+          </div>
+        </div>
+        <div className="flex flex-1 min-h-0 gap-4 overflow-hidden pb-4">
           {Array.from({ length: 4 }).map((_, col) => (
             <div key={col} className="flex w-64 shrink-0 flex-col gap-3">
               <div className="flex items-center justify-between px-1">

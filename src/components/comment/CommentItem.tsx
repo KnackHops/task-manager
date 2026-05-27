@@ -233,15 +233,15 @@ export function CommentItem({
   return (
     <div className="group flex gap-3 py-2">
       <Avatar
-        name={comment.author.full_name}
-        url={comment.author.avatar_url}
+        name={comment.author?.full_name ?? 'Deleted User'}
+        url={comment.author?.avatar_url ?? null}
         size="md"
         className="shrink-0 mt-0.5"
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">
-            {comment.author.full_name}
+            {comment.author?.full_name ?? 'Deleted User'}
           </span>
           <span className="text-xs text-muted-foreground">
             {formatDistanceToNow(new Date(comment.created_at), {

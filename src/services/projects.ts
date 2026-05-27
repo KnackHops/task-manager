@@ -153,7 +153,35 @@ export async function updateProject(
   return data as Project
 }
 
-export async function deleteProject(projectId: string): Promise<void> {
+export async function deleteProject(projectId: string, deletedBy: string): Promise<void> {
+  // Fetch members + project info before cascade wipes everything
+  const [{ data: members }, { data: project }] = await Promise.all([
+    supabase
+      .from('project_members')
+      .select('user_id')
+      .eq('project_id', projectId)
+      .neq('user_id', deletedBy),
+    supabase
+      .from('projects')
+      .select('name, slug')
+      .eq('id', projectId)
+      .single(),
+  ])
+
+  // Notify all other members before deletion
+  if (members?.length && project) {
+    await supabase.from('notifications').insert(
+      members.map((m) => ({
+        user_id: m.user_id,
+        type: 'kick' as const,
+        task_id: null,
+        actor_id: deletedBy,
+        message: `"${project.name}" was deleted`,
+        project_slug: project.slug,
+      }))
+    )
+  }
+
   const { error } = await supabase
     .from('projects')
     .delete()

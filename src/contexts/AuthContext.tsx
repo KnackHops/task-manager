@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { queryClient } from "@/lib/queryClient";
 
 interface Profile {
   id: string;
@@ -97,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setProfile(null);
+    queryClient.clear();
   }, []);
 
   return <AuthContext.Provider value={{ user, profile, session, isLoading, signIn, signUp, signOut }}>{children}</AuthContext.Provider>;

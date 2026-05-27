@@ -63,8 +63,9 @@ export function useUpdateProject(slug: string) {
 
 export function useDeleteProject() {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
-    mutationFn: (projectId: string) => deleteProject(projectId),
+    mutationFn: (projectId: string) => deleteProject(projectId, user!.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.all })
     },

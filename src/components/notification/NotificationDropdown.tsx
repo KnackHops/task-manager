@@ -52,8 +52,12 @@ export function NotificationDropdown({
       markAsRead.mutate(n.id)
     }
     onClose()
-    if (n.task_id) {
+    if (n.type === 'kick') {
+      navigate({ to: '/projects' })
+    } else if (n.task_id) {
       navigate({ to: `/p/${n.project_slug}`, search: { task: n.task_id } })
+    } else if (n.project_slug) {
+      navigate({ to: `/p/${n.project_slug}`, search: { task: undefined, sprint: undefined } })
     }
   }
 
@@ -111,12 +115,12 @@ export function NotificationDropdown({
                 key={n.id}
                 onClick={() => handleClick(n)}
                 className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors ${
-                  n.type !== 'invite' ? 'cursor-pointer hover:bg-muted/50' : ''
+                  n.type === 'invite' ? '' : 'cursor-pointer hover:bg-muted/50'
                 } ${!n.is_read ? 'bg-primary/5' : ''}`}
               >
                 <Avatar
-                  name={n.actor.full_name}
-                  url={n.actor.avatar_url}
+                  name={n.actor?.full_name ?? 'Deleted User'}
+                  url={n.actor?.avatar_url ?? null}
                   size="sm"
                 />
                 <div className="flex-1 min-w-0">

@@ -447,11 +447,11 @@ export function TaskDetailPanel({
           {task.creator && (
             <div className="flex items-center gap-1.5">
               <Avatar
-                name={task.creator.full_name}
-                url={task.creator.avatar_url}
+                name={task.creator?.full_name ?? 'Deleted User'}
+                url={task.creator?.avatar_url ?? null}
                 size="sm"
               />
-              <span>Created by {task.creator.full_name}</span>
+              <span>Created by {task.creator?.full_name ?? 'Deleted User'}</span>
             </div>
           )}
           <span>

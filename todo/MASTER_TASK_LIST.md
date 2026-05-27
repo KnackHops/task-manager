@@ -40,7 +40,8 @@ notifications (user_id, type, task_id, comment_id, actor_id, message, is_read, p
 /p/:slug                        — project board (kanban view)
 /p/:slug/sprints                — sprint analytics (burndown, velocity, summary)
 /p/:slug/archive                — project archive view (with sprint filter)
-/p/:slug/settings               — project settings (general, columns, tags, members)
+/p/:slug/settings               — project settings (general, columns, tags, sprints, members, danger zone)
+/invites                        — pending project invites
 ```
 
 ### RLS Policy Model
@@ -75,6 +76,10 @@ All policies based on `project_members` table (not `profiles.role`):
 - [ ] Run `003_default_column_and_task_ids.sql` in Studio SQL Editor (prefix, default_column_id, task_number + trigger)
 - [ ] Run `004_multi_assignee.sql` in Studio SQL Editor (task_assignees table, backfill, drop assigned_to)
 - [ ] Run `005_notifications.sql` in Studio SQL Editor (notifications table, comment/assignment triggers, Realtime)
+- [ ] Run `006` through `014` (storage, attachments, story points, sprints, done column, invite status)
+- [ ] Run `015_user_deletion_safety.sql` (FK SET NULL + CASCADE + RLS self-delete)
+- [ ] Run `016_member_notification_types.sql` (transfer/leave/kick notification types)
+- [ ] Run `017_notifications_insert_policy.sql` (INSERT RLS policy for client-side notification inserts)
 - [ ] Verify tables: profiles, projects, project_columns, project_members, project_tags, tasks, task_tags, task_assignees, comments, notifications, attachments, activity_log
 - [ ] Verify RLS policies active
 
@@ -710,10 +715,12 @@ search_tasks project=nonstop query="email template"   → search by text
 - [x] `BoardContainer.tsx` — 4-column board skeleton with card placeholders
 - [x] `projects.tsx` — 6 project card grid skeleton
 - [x] `TaskDetailPanel.tsx` — full dialog layout skeleton
-- [x] `$slug.tsx` — board skeleton while project loads
+- [x] `$slug.tsx` — header skeleton + board column skeleton while project loads
+- [x] `$slug/index.tsx` — full skeleton (header + columns) while sprint filter resolves (prevents flash of "All Tasks" before active sprint auto-selects)
 - [x] `sprints.tsx` — sprint selector + summary + charts skeletons
 - [x] `ArchiveView.tsx` — search bar + 6 task item row skeletons
 - [x] Only replaced `isLoading` spinners, NOT `isPending` mutation spinners
+- [x] Board skeleton consistency: all three loading phases (project loading → sprint resolving → tasks loading) show identical header + column skeleton
 
 ### 14.5.2 Dark/Light Mode Toggle Fix
 - [x] Moved `class="dark"` from `<body>` to `<html>` in `index.html`
@@ -746,7 +753,93 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
-## PHASE 14.7: PENDING INVITES + AUTH EMAIL FIX (OPTIONAL) — TODO
+## PHASE 14.6: IN-SYSTEM INVITE FLOW ✅ COMPLETE
+
+> GitHub-style invite flow for existing users. Invite creates pending membership + notification. Invitee accepts/declines inline in notification or on standalone invites page.
+
+### 14.6.1 Migration
+- [x] `supabase/migrations/014_invite_status.sql` — `status` (pending/active) + `invited_by` on `project_members`, `project_member_id` on `notifications`, nullable `task_id`, `'invite'` notification type
+
+### 14.6.2 Types
+- [x] `MemberStatus` type (`'pending' | 'active'`), `PendingInvite` interface
+- [x] `ProjectMember` — added `status`, `invited_by`
+- [x] `Notification` — `task_id` nullable, added `project_member_id`
+- [x] `NotificationType` — added `'invite'`
+
+### 14.6.3 Services
+- [x] `inviteMember` — creates pending membership + invite notification with project name/inviter name
+- [x] `fetchMembers` — takes `statusFilter` param, defaults to `['active']`
+- [x] New: `fetchPendingInvites`, `acceptInvite`, `declineInvite`
+
+### 14.6.4 Hooks
+- [x] `useMembers` — accepts status filter, `useInviteMember` passes `invitedBy`
+- [x] `useAcceptInvite`, `useDeclineInvite` — invalidate invites + notifications + projects
+- [x] New: `src/hooks/useInvites.ts` — `usePendingInvites`, `usePendingInviteCount`
+
+### 14.6.5 UI
+- [x] `NotificationDropdown` — invite notifications show Accept/Decline buttons inline
+- [x] `src/routes/_app/invites.tsx` — standalone invites page with accept/decline per card
+- [x] `Sidebar` — Invites nav link (UserPlus icon) with badge count in non-project context
+- [x] `MemberManager` — shows pending members with "Pending" badge, hides permission toggles for pending, toast says "Invite sent"
+
+### 14.6.6 Build Verification
+- [x] `npm run build` — passes clean (tsc + vite)
+
+---
+
+## PHASE 14.7: USER DELETION SAFETY + OWNERSHIP TRANSFER + LEAVE PROJECT ✅ COMPLETE
+
+> Fix FK constraints so users can be deleted without errors. Owner deletion cascades to delete their owned projects. Transfer ownership, leave project, and member lifecycle notifications.
+
+### 14.7.1 FK Constraint Migration (015)
+- [x] Change RESTRICT FKs to `ON DELETE SET NULL`:
+  - `tasks.created_by`, `comments.author_id`, `activity_log.actor_id`, `attachments.uploaded_by`, `notifications.actor_id`, `project_members.invited_by`
+- [x] `projects.created_by` → ON DELETE CASCADE (owner deleted = project deleted)
+- [x] RLS `members_delete` policy updated — allow self-deletion (`OR auth.uid() = user_id`)
+- [x] TypeScript types made nullable where needed
+- [x] UI "Deleted User" placeholders in comments, notifications, task detail, attachments
+
+### 14.7.2 Transfer Ownership
+- [x] Service: `transferOwnership(projectId, currentOwnerId, newOwnerId)` — demote/promote + update `projects.created_by`
+- [x] Hook: `useTransferOwnership(projectId)`
+- [x] UI: Transfer Ownership section in MemberManager (owner only), member buttons, confirmation dialog
+
+### 14.7.3 Leave Project
+- [x] Service: `leaveProject(projectId, userId)` — blocks owners, deletes own membership
+- [x] Hook: `useLeaveProject(projectId)`
+- [x] Bug fix: fetch owner/project/leaver data BEFORE deleting membership (RLS blocks reads after removal)
+- [x] UI moved to DangerZone component (see 14.7.5)
+
+### 14.7.4 Member Lifecycle Notifications (016 + 017)
+- [x] Migration 016: added `transfer`, `leave`, `kick` notification types to CHECK constraint
+- [x] Migration 017: `notifications_insert` RLS policy — allows authenticated users to INSERT (needed for client-side notification inserts from leave/transfer/kick/delete)
+- [x] Transfer ownership → notifies new owner
+- [x] Member leaves → notifies project owner
+- [x] Member kicked/removed → notifies kicked member
+- [x] Project deleted → notifies all members before cascade delete
+- [x] NotificationDropdown: transfer/leave click → navigate to project, kick click → navigate to /projects
+
+### 14.7.5 Danger Zone
+- [x] New: `src/components/settings/DangerZone.tsx` — red-bordered section in project settings
+- [x] Owner: Transfer Ownership (member buttons + confirm dialog) + Delete Project (confirm dialog, notifies members)
+- [x] Non-owner: Leave Project (confirm dialog, redirects to /projects)
+- [x] Moved leave/transfer out of `MemberManager` → MemberManager now only handles member list, invite, permissions, remove
+- [x] `deleteProject` service updated — takes `deletedBy` param, notifies all members before cascade delete
+- [x] `useDeleteProject` hook passes `user!.id` as `deletedBy`
+- [x] Settings page: DangerZone rendered after MemberManager with `isOwner`, `activeMembers` props
+
+### 14.7.6 Auth Session Cache Fix
+- [x] Bug: switching accounts showed previous user's cached data (owner view as member)
+- [x] Extracted `src/lib/queryClient.ts` — shared QueryClient instance
+- [x] `src/main.tsx` imports from shared module (no more inline `new QueryClient()`)
+- [x] `src/contexts/AuthContext.tsx` — calls `queryClient.clear()` on sign-out
+
+### 14.7.7 ConfirmDialog Label Fix
+- [x] `ConfirmDialog` pending text: `"Deleting..."` → `"${confirmLabel}..."` (dynamic based on action)
+
+---
+
+## PHASE 14.8: PENDING INVITES + AUTH EMAIL FIX (OPTIONAL) — TODO
 
 > Allow inviting users who haven't signed up yet. They receive an email, and on registration are auto-added to the project.
 
@@ -777,7 +870,7 @@ task-manager/
 │   │   ├── sprint-analytics/ # SprintSummaryCard.tsx, BurndownChart.tsx, VelocityChart.tsx
 │   │   ├── task/             # CreateTaskDialog.tsx, TaskDetailPanel.tsx
 │   │   ├── project/          # CreateProjectDialog.tsx, ProjectSwitcher.tsx
-│   │   ├── settings/         # ProjectGeneralSettings.tsx, ColumnManager.tsx, TagManager.tsx, MemberManager.tsx, SprintManager.tsx
+│   │   ├── settings/         # ProjectGeneralSettings.tsx, ColumnManager.tsx, TagManager.tsx, MemberManager.tsx, SprintManager.tsx, DangerZone.tsx
 │   │   ├── layout/           # AppShell.tsx, Sidebar.tsx, Header.tsx
 │   │   └── ui/               # Badge.tsx, Dialog.tsx, ConfirmDialog.tsx, Select.tsx, Avatar.tsx, TagSelect.tsx, AssigneeSelect.tsx, ColorPicker.tsx
 │   ├── contexts/
@@ -788,7 +881,8 @@ task-manager/
 │   │   ├── useTasks.ts       # includes optimistic archive/unarchive/reorder/update
 │   │   ├── useColumns.ts
 │   │   ├── useTags.ts        # includes optimistic useSetTaskTags
-│   │   ├── useMembers.ts     # includes optimistic toggleFavorite
+│   │   ├── useMembers.ts     # includes optimistic toggleFavorite, accept/decline invite, leave/transfer/remove
+│   │   ├── useInvites.ts     # usePendingInvites, usePendingInviteCount
 │   │   ├── useAssignees.ts   # optimistic useSetTaskAssignees
 │   │   ├── useAttachments.ts # useTaskAttachments, useCommentAttachments, upload/delete/reorder
 │   │   ├── useComments.ts    # useComments + Realtime, CRUD mutations
@@ -802,7 +896,7 @@ task-manager/
 │   │   ├── tasks.ts          # fetchTasks/fetchTask with comment_count, attachment_count
 │   │   ├── columns.ts
 │   │   ├── tags.ts
-│   │   ├── members.ts
+│   │   ├── members.ts        # invite, accept/decline, leave, transfer, remove (with notifications)
 │   │   ├── assignees.ts      # setTaskAssignees
 │   │   ├── attachments.ts    # uploadAttachment, deleteAttachment, getSignedUrl, reorderAttachments
 │   │   ├── comments.ts       # fetchComments, createComment, updateComment, deleteComment
@@ -812,6 +906,7 @@ task-manager/
 │   │   └── profiles.ts
 │   ├── lib/
 │   │   ├── supabase.ts       # lockAcquireTimeout fix
+│   │   ├── queryClient.ts    # shared QueryClient instance (imported by main.tsx + AuthContext)
 │   │   ├── mentions.ts       # encodeMention, parseBody, filterMembers, MENTION_REGEX
 │   │   ├── rich-editor.ts    # contentEditable utilities (extractRawBody, populateEditor, inline insert)
 │   │   ├── file-utils.ts     # isImageType, file type helpers
@@ -828,6 +923,7 @@ task-manager/
 │   │   └── _app/
 │   │       ├── route.tsx       # Auth guard
 │   │       ├── projects.tsx    # Project list
+│   │       ├── invites.tsx     # Pending invites page
 │   │       ├── sprints.tsx     # Global sprints placeholder
 │   │       └── p/
 │   │           ├── $slug.tsx       # Project layout + ProjectProvider
@@ -852,7 +948,11 @@ task-manager/
 │       ├── 010_default_sprint_duration.sql
 │       ├── 011_sprint_auto_assign.sql
 │       ├── 012_done_column.sql
-│       └── 013_task_done_and_sprint_target.sql
+│       ├── 013_task_done_and_sprint_target.sql
+│       ├── 014_invite_status.sql
+│       ├── 015_user_deletion_safety.sql
+│       ├── 016_member_notification_types.sql
+│       └── 017_notifications_insert_policy.sql
 ├── .env.example
 ├── .env.local
 ├── vite.config.ts
@@ -879,12 +979,12 @@ task-manager/
 | `profiles` | User profiles (auto-created on signup) |
 | `projects` | Projects (name, slug, prefix, default_column_id, sprint_column_id, default_sprint_days, auto_archive_done, created_by) |
 | `project_columns` | Custom columns per project (name, slug, position, is_done) |
-| `project_members` | Membership + granular permissions (7 permission flags) |
+| `project_members` | Membership + granular permissions (7 permission flags), invite status (pending/active), invited_by |
 | `project_tags` | Custom tags per project (name, slug, color) |
 | `tasks` | Tasks (task_number, column_id, sprint_id, priority, story_points, is_done, done_at, archived, position) |
 | `task_tags` | Many-to-many join (task ↔ tag) |
 | `task_assignees` | Many-to-many join (task ↔ profiles) |
-| `notifications` | Per-user notifications (comment, mention, assigned) |
+| `notifications` | Per-user notifications (comment, mention, assignment, invite, transfer, leave, kick) |
 | `sprints` | Sprint management (name, project_id, start_date, end_date, status, goal, story_points_target) |
 | `comments` | Task comments (with @mention support) |
 | `attachments` | File attachments |

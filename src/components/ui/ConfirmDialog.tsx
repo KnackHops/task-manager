@@ -46,7 +46,7 @@ export function ConfirmDialog({
               : 'rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50'
           }
         >
-          {isPending ? 'Deleting...' : confirmLabel}
+          {isPending ? `${confirmLabel}...` : confirmLabel}
         </button>
       </div>
     </Dialog>

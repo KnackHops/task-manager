@@ -154,7 +154,7 @@ export function AttachmentItem({
           </p>
           <p className="text-xs text-muted-foreground">
             {formatFileSize(attachment.file_size)} &middot;{' '}
-            {attachment.uploader.full_name} &middot;{' '}
+            {attachment.uploader?.full_name ?? 'Deleted User'} &middot;{' '}
             {formatDistanceToNow(new Date(attachment.created_at), { addSuffix: true })}
           </p>
         </div>
