@@ -1,3 +1,7 @@
+import WebSocket from 'ws'
+// @ts-expect-error — polyfill for Node < 22 (no native WebSocket)
+globalThis.WebSocket = WebSocket
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js'
