@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { AppShell } from '@/components/layout/AppShell'
+import { ProfileSettings } from '@/components/settings/ProfileSettings'
 import { ApiKeyManager } from '@/components/settings/ApiKeyManager'
 
 export const Route = createFileRoute('/_app/settings')({
@@ -18,6 +19,8 @@ function UserSettingsPage() {
         </div>
 
         <div className="space-y-8 max-w-2xl">
+          <ProfileSettings />
+          <hr className="border-border" />
           <ApiKeyManager />
         </div>
       </div>

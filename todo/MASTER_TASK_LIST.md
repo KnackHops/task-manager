@@ -57,31 +57,33 @@ All policies based on `project_members` table (not `profiles.role`):
 
 ---
 
-## PHASE 0: INFRASTRUCTURE ✅ PARTIAL
+## PHASE 0: INFRASTRUCTURE ✅ COMPLETE
 
 ### 0.1 Supabase on Coolify
 - [x] Deployed self-hosted Supabase on Coolify
 - [x] All services healthy
 - [x] SMTP configured (SendGrid)
-- [ ] Set `SITE_URL` to frontend domain
+- [x] Set `SITE_URL` to frontend domain
 
 ### 0.2 Storage Buckets
-- [ ] Create bucket `task-attachments`
-- [ ] Create bucket `comment-attachments`
-- [ ] Set storage policies
+- [x] Create bucket `attachments` (private, 50MB limit, user-folder policies)
+- [x] Create bucket `avatars` (public, 2MB limit, user-folder policies)
+- [x] Storage policies: select, insert, delete on `attachments`; select, insert, update, delete on `avatars`
 
 ### 0.3 Run Database Migrations
-- [ ] Run `001_full_schema.sql` in Studio SQL Editor
-- [ ] Run `002_redesign.sql` in Studio SQL Editor (new: projects, columns, tags, members, archive)
-- [ ] Run `003_default_column_and_task_ids.sql` in Studio SQL Editor (prefix, default_column_id, task_number + trigger)
-- [ ] Run `004_multi_assignee.sql` in Studio SQL Editor (task_assignees table, backfill, drop assigned_to)
-- [ ] Run `005_notifications.sql` in Studio SQL Editor (notifications table, comment/assignment triggers, Realtime)
-- [ ] Run `006` through `014` (storage, attachments, story points, sprints, done column, invite status)
-- [ ] Run `015_user_deletion_safety.sql` (FK SET NULL + CASCADE + RLS self-delete)
-- [ ] Run `016_member_notification_types.sql` (transfer/leave/kick notification types)
-- [ ] Run `017_notifications_insert_policy.sql` (INSERT RLS policy for client-side notification inserts)
-- [ ] Verify tables: profiles, projects, project_columns, project_members, project_tags, tasks, task_tags, task_assignees, comments, notifications, attachments, activity_log
-- [ ] Verify RLS policies active
+- [x] Run `001_full_schema.sql` — base tables + RLS
+- [x] Run `002_redesign.sql` — projects, columns, tags, members, archive
+- [x] Run `003_default_column_and_task_ids.sql` — prefix, default_column_id, task_number + trigger
+- [x] Run `004_multi_assignee.sql` — task_assignees table, backfill, drop assigned_to
+- [x] Run `005_notifications.sql` — notifications table, comment/assignment triggers, Realtime
+- [x] Run `006` through `014` — storage, attachments, story points, sprints, done column, invite status
+- [x] Run `015_user_deletion_safety.sql` — FK SET NULL + CASCADE + RLS self-delete
+- [x] Run `016_member_notification_types.sql` — transfer/leave/kick notification types
+- [x] Run `017_notifications_insert_policy.sql` — INSERT RLS policy for client-side notification inserts
+- [x] Run `018_api_keys.sql` — api_keys table + RLS for MCP auth
+- [x] Run `019_avatars_bucket.sql` — avatars storage bucket + policies
+- [x] Verify tables: profiles, projects, project_columns, project_members, project_tags, tasks, task_tags, task_assignees, comments, notifications, attachments, activity_log, api_keys
+- [x] Verify RLS policies active
 
 ---
 
@@ -571,7 +573,7 @@ search_tasks project=nonstop query="email template"   → search by text
 - [x] Mobile responsive board
 - [x] Pagination / virtualization
 - [ ] Security audit
-- [ ] MCP `read_attachment` tool — auto-download + extract zip attachments (prototypes), return file tree + contents to agent in one call. Eliminates manual download/extract/read workflow
+- [x] MCP `read_attachment` tool — auto-download + extract zip attachments (prototypes), return file tree + contents to agent in one call. Eliminates manual download/extract/read workflow
 - [x] MCP Streamable HTTP transport — convert stdio → Streamable HTTP, deploy as service on Coolify, API key auth. Frontend UI for generating/managing API keys per user. Devs just add a URL to MCP config, no local build needed
 
 ---
@@ -696,15 +698,29 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
-## PHASE 14.4: PROFILE SETTINGS — TODO
+## PHASE 14.4: PROFILE SETTINGS ✅ COMPLETE
 
-> User profile settings page — edit display name, avatar, email preferences, theme.
+> User profile settings — edit display name, avatar upload/remove, account info display. Added to existing `/settings` page above API key management.
 
-- [ ] Profile settings route + page component
-- [ ] Edit display name (update `profiles` table)
-- [ ] Avatar upload/change (Supabase Storage)
-- [ ] Email notification preferences
-- [ ] Account info display (email, member since)
+### 14.4.1 Migration
+- [x] `supabase/migrations/019_avatars_bucket.sql` — public `avatars` storage bucket (2MB limit), user-folder policies (select/insert/update/delete)
+
+### 14.4.2 Service + Hooks
+- [x] `src/services/profiles.ts` — `updateProfile(userId, { full_name })`, `uploadAvatar(userId, file)` (upload + update avatar_url), `removeAvatar(userId)` (delete from storage + null avatar_url)
+- [x] `src/hooks/useProfiles.ts` — `useUpdateProfile`, `useUploadAvatar`, `useRemoveAvatar` (mutations with `refreshProfile()` on success)
+
+### 14.4.3 AuthContext
+- [x] `src/contexts/AuthContext.tsx` — added `refreshProfile()` to context (re-fetches profile from DB, used by mutation hooks)
+
+### 14.4.4 Avatar Component
+- [x] `src/components/ui/Avatar.tsx` — added `lg` size (`h-20 w-20 text-2xl`) for profile settings display
+
+### 14.4.5 ProfileSettings Component
+- [x] `src/components/settings/ProfileSettings.tsx` — avatar section (upload/remove buttons, loading overlay), display name input (dirty check, save button), account info (email, member since)
+- [x] `src/routes/_app/settings.tsx` — ProfileSettings above ApiKeyManager with divider
+
+### 14.4.6 Build Verification
+- [x] `npm run build` — passes clean (tsc + vite)
 
 ---
 
@@ -874,6 +890,39 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
+## PHASE 14.10: MCP READ_ATTACHMENT + GET_TASK ATTACHMENT FIX ✅ COMPLETE
+
+> `read_attachment` MCP tool: server-side file download + content extraction. Returns text/code as inline text, images as base64, ZIP archives as file tree + extracted text contents. Also fixed `get_task` to include attachment details (IDs, filenames) instead of just count.
+
+### 14.10.1 `read_attachment` Tool
+- [x] `mcp-server/src/tools/read-attachment.ts` — new tool, registered in `index.ts`
+- [x] File type classification: MIME type first, file extension fallback for `application/octet-stream`
+  - `text` — `text/*`, `application/json`, `application/javascript`, etc. + 60+ text extensions
+  - `image` — `image/*` + common image extensions
+  - `zip` — `application/zip`, `application/x-zip-compressed`, `.zip`
+  - `binary` — everything else (returns metadata only, suggests `get_attachment_url`)
+- [x] Size limits: 10MB download gate, 5MB image (base64 bloat), 500KB text truncation
+- [x] ZIP handling via `jszip`: file tree listing + text file extraction inline
+  - ZIP limits: 25MB total extracted, 200 file cap, 5MB per entry
+  - Skips binary/image files inside ZIPs (noted in summary)
+  - Cumulative size tracking prevents zip bomb extraction
+- [x] Image handler: base64 encode, return MCP `image` content block + text header
+- [x] `jszip` added to `mcp-server/package.json` dependencies
+
+### 14.10.2 `get_task` Attachment Detail Fix
+- [x] Changed select from `attachments(count)` → `attachments(id, file_name, file_type, file_size)`
+- [x] Added "Attachments" section to output listing each file with ID, name, type, size
+- [x] Attachment IDs now visible for use with `get_attachment_url` and `read_attachment`
+- [x] Updated tool description to mention "attachments (with IDs for use with get_attachment_url)"
+
+### 14.10.3 `get_attachment_url` Description Enhancement
+- [x] Clarified tool description: "use attachment IDs from get_task output", "URL expires in 1 hour", "always ask the user where to save the file"
+
+### 14.10.4 Build Verification
+- [x] `npm run build` — passes clean (tsc)
+
+---
+
 ## PHASE 14.8: PENDING INVITES + AUTH EMAIL FIX (OPTIONAL) — TODO
 
 > Allow inviting users who haven't signed up yet. They receive an email, and on registration are auto-added to the project.
@@ -905,7 +954,7 @@ task-manager/
 │   │   ├── sprint-analytics/ # SprintSummaryCard.tsx, BurndownChart.tsx, VelocityChart.tsx
 │   │   ├── task/             # CreateTaskDialog.tsx, TaskDetailPanel.tsx
 │   │   ├── project/          # CreateProjectDialog.tsx, ProjectSwitcher.tsx
-│   │   ├── settings/         # ProjectGeneralSettings.tsx, ColumnManager.tsx, TagManager.tsx, MemberManager.tsx, SprintManager.tsx, DangerZone.tsx, ApiKeyManager.tsx
+│   │   ├── settings/         # ProjectGeneralSettings.tsx, ColumnManager.tsx, TagManager.tsx, MemberManager.tsx, SprintManager.tsx, DangerZone.tsx, ApiKeyManager.tsx, ProfileSettings.tsx
 │   │   ├── layout/           # AppShell.tsx, Sidebar.tsx, Header.tsx
 │   │   └── ui/               # Badge.tsx, Dialog.tsx, ConfirmDialog.tsx, Select.tsx, Avatar.tsx, TagSelect.tsx, AssigneeSelect.tsx, ColorPicker.tsx
 │   ├── contexts/
@@ -926,7 +975,7 @@ task-manager/
 │   │   ├── useSprintAnalytics.ts # useSprintSummary, useSprintBurndown, useVelocity
 │   │   ├── useBulkAssignSprint.ts # useBulkAssignSprint (bulk assign tasks to sprint)
 │   │   ├── useApiKeys.ts     # useApiKeys, useCreateApiKey, useRevokeApiKey
-│   │   └── useProfiles.ts
+│   │   └── useProfiles.ts    # useUpdateProfile, useUploadAvatar, useRemoveAvatar
 │   ├── services/
 │   │   ├── projects.ts
 │   │   ├── tasks.ts          # fetchTasks/fetchTask with comment_count, attachment_count
@@ -940,7 +989,7 @@ task-manager/
 │   │   ├── sprints.ts        # fetchSprints, createSprint, updateSprint, deleteSprint, completeSprint (auto-archives done), autoAssignTasksToSprint
 │   │   ├── sprint-analytics.ts # fetchSprintSummary, fetchSprintBurndown, fetchVelocity
 │   │   ├── api-keys.ts       # generateKey, hashKey, createApiKey, listApiKeys, revokeApiKey
-│   │   └── profiles.ts
+│   │   └── profiles.ts       # updateProfile, uploadAvatar, removeAvatar
 │   ├── lib/
 │   │   ├── supabase.ts       # lockAcquireTimeout fix
 │   │   ├── queryClient.ts    # shared QueryClient instance (imported by main.tsx + AuthContext)
@@ -991,7 +1040,8 @@ task-manager/
 │       ├── 015_user_deletion_safety.sql
 │       ├── 016_member_notification_types.sql
 │       ├── 017_notifications_insert_policy.sql
-│       └── 018_api_keys.sql
+│       ├── 018_api_keys.sql
+│       └── 019_avatars_bucket.sql
 ├── .env.example
 ├── .env.local
 ├── vite.config.ts
@@ -1006,7 +1056,7 @@ task-manager/
 │       ├── auth.ts          # API key auth, magic link sessions, 55min cache
 │       ├── supabase.ts      # Admin + anon Supabase clients
 │       ├── helpers.ts       # Task ID parsing, slug resolution
-│       └── tools/           # One file per MCP tool
+│       └── tools/           # One file per MCP tool (list-projects, list-tasks, get-task, search-tasks, get-attachment-url, read-attachment, create-task, update-task, add-comment)
 └── todo/
     └── MASTER_TASK_LIST.md
 ```

@@ -20,6 +20,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -37,6 +38,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(data as Profile);
     }
   }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (user) {
+      await fetchProfile(user.id);
+    }
+  }, [user, fetchProfile]);
 
   useEffect(() => {
     // Get initial session
@@ -101,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
   }, []);
 
-  return <AuthContext.Provider value={{ user, profile, session, isLoading, signIn, signUp, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, profile, session, isLoading, signIn, signUp, signOut, refreshProfile }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
