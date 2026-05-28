@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { supabase } from '../supabase.js'
+import type { RequestContext } from '../auth.js'
 import {
   resolveProject,
   resolveColumn,
@@ -9,7 +9,7 @@ import {
   formatTaskId,
 } from '../helpers.js'
 
-export function registerCreateTask(server: McpServer, userId: string) {
+export function registerCreateTask(server: McpServer, ctx: RequestContext) {
   server.tool(
     'create_task',
     'Create a new task in a project. Resolves column, tags, and sprint by slug/name.',
@@ -27,17 +27,16 @@ export function registerCreateTask(server: McpServer, userId: string) {
     },
     async (args) => {
       try {
-        const project = await resolveProject(args.project)
+        const project = await resolveProject(ctx.supabase, args.project)
 
         // Resolve column
         let columnId = project.default_column_id
         if (args.column) {
-          const col = await resolveColumn(project.id, args.column)
+          const col = await resolveColumn(ctx.supabase, project.id, args.column)
           columnId = col.id
         }
         if (!columnId) {
-          // Fallback to first column
-          const { data: cols } = await supabase
+          const { data: cols } = await ctx.supabase
             .from('project_columns')
             .select('id')
             .eq('project_id', project.id)
@@ -52,12 +51,12 @@ export function registerCreateTask(server: McpServer, userId: string) {
         // Resolve sprint
         let sprintId: string | null = null
         if (args.sprint) {
-          const sprint = await resolveSprint(project.id, args.sprint)
+          const sprint = await resolveSprint(ctx.supabase, project.id, args.sprint)
           sprintId = sprint.id
         }
 
         // Get next position
-        const { count } = await supabase
+        const { count } = await ctx.supabase
           .from('tasks')
           .select('id', { count: 'exact', head: true })
           .eq('project_id', project.id)
@@ -65,12 +64,12 @@ export function registerCreateTask(server: McpServer, userId: string) {
           .eq('archived', false)
 
         // Insert task
-        const { data: task, error } = await supabase
+        const { data: task, error } = await ctx.supabase
           .from('tasks')
           .insert({
             project_id: project.id,
             column_id: columnId,
-            created_by: userId,
+            created_by: ctx.userId,
             title: args.title,
             description: args.description ?? null,
             priority: args.priority,
@@ -90,10 +89,10 @@ export function registerCreateTask(server: McpServer, userId: string) {
         if (args.tags?.length) {
           const tagIds: string[] = []
           for (const slug of args.tags) {
-            const tag = await resolveTag(project.id, slug)
+            const tag = await resolveTag(ctx.supabase, project.id, slug)
             tagIds.push(tag.id)
           }
-          await supabase
+          await ctx.supabase
             .from('task_tags')
             .insert(tagIds.map((tagId) => ({ task_id: task.id, tag_id: tagId })))
         }
@@ -102,7 +101,7 @@ export function registerCreateTask(server: McpServer, userId: string) {
         if (args.assignees?.length) {
           const assigneeIds: string[] = []
           for (const email of args.assignees) {
-            const { data: profile } = await supabase
+            const { data: profile } = await ctx.supabase
               .from('profiles')
               .select('id')
               .eq('email', email)
@@ -110,7 +109,7 @@ export function registerCreateTask(server: McpServer, userId: string) {
             if (profile) assigneeIds.push(profile.id)
           }
           if (assigneeIds.length > 0) {
-            await supabase
+            await ctx.supabase
               .from('task_assignees')
               .insert(assigneeIds.map((id) => ({ task_id: task.id, assignee_id: id })))
           }

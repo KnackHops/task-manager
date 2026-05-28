@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { supabase } from '../supabase.js'
+import type { RequestContext } from '../auth.js'
 
-export function registerGetAttachmentUrl(server: McpServer) {
+export function registerGetAttachmentUrl(server: McpServer, ctx: RequestContext) {
   server.tool(
     'get_attachment_url',
     'Get a signed download URL for an attachment. URL expires in 1 hour.',
@@ -11,7 +11,7 @@ export function registerGetAttachmentUrl(server: McpServer) {
     },
     async (args) => {
       try {
-        const { data: attachment, error } = await supabase
+        const { data: attachment, error } = await ctx.supabase
           .from('attachments')
           .select('id, file_name, file_type, file_size, storage_path')
           .eq('id', args.attachment_id)
@@ -21,7 +21,7 @@ export function registerGetAttachmentUrl(server: McpServer) {
           return { content: [{ type: 'text' as const, text: `Attachment not found: ${error.message}` }], isError: true }
         }
 
-        const { data: signedData, error: signError } = await supabase.storage
+        const { data: signedData, error: signError } = await ctx.supabase.storage
           .from('attachments')
           .createSignedUrl(attachment.storage_path, 3600)
 

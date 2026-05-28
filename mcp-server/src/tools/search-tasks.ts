@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { supabase } from '../supabase.js'
+import type { RequestContext } from '../auth.js'
 import { resolveProject, formatTaskLine } from '../helpers.js'
 
-export function registerSearchTasks(server: McpServer) {
+export function registerSearchTasks(server: McpServer, ctx: RequestContext) {
   server.tool(
     'search_tasks',
     'Search tasks by text in title or description. Returns matching tasks with their IDs.',
@@ -13,10 +13,10 @@ export function registerSearchTasks(server: McpServer) {
     },
     async (args) => {
       try {
-        const project = await resolveProject(args.project)
+        const project = await resolveProject(ctx.supabase, args.project)
         const pattern = `%${args.query}%`
 
-        const { data: tasks, error } = await supabase
+        const { data: tasks, error } = await ctx.supabase
           .from('tasks')
           .select(`
             id, title, priority, task_number, story_points, route_path, description,

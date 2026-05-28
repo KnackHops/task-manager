@@ -135,6 +135,18 @@ export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
                 </span>
               )}
             </Link>
+            <Link
+              to="/settings"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                currentPath === '/settings'
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+              )}
+            >
+              <Settings className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>Settings</span>}
+            </Link>
           </>
         )}
       </nav>

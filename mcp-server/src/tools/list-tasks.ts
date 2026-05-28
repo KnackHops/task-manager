@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { supabase } from '../supabase.js'
+import type { RequestContext } from '../auth.js'
 import {
   resolveProject,
   resolveColumn,
@@ -10,7 +10,7 @@ import {
   formatTaskLine,
 } from '../helpers.js'
 
-export function registerListTasks(server: McpServer) {
+export function registerListTasks(server: McpServer, ctx: RequestContext) {
   server.tool(
     'list_tasks',
     `List tasks in a project. Supports natural queries: filter by tag slug (e.g. 'bug'), column slug (e.g. 'review'), sprint name (or 'active'), assignee name, priority. Combine filters for queries like 'bugs in review for Sprint 1'.`,
@@ -25,9 +25,9 @@ export function registerListTasks(server: McpServer) {
     },
     async (args) => {
       try {
-        const project = await resolveProject(args.project)
+        const project = await resolveProject(ctx.supabase, args.project)
 
-        let query = supabase
+        let query = ctx.supabase
           .from('tasks')
           .select(`
             id, title, priority, task_number, story_points, route_path, archived,
@@ -41,12 +41,12 @@ export function registerListTasks(server: McpServer) {
           .order('task_number', { ascending: true })
 
         if (args.column) {
-          const col = await resolveColumn(project.id, args.column)
+          const col = await resolveColumn(ctx.supabase, project.id, args.column)
           query = query.eq('column_id', col.id)
         }
 
         if (args.sprint) {
-          const sprint = await resolveSprint(project.id, args.sprint)
+          const sprint = await resolveSprint(ctx.supabase, project.id, args.sprint)
           query = query.eq('sprint_id', sprint.id)
         }
 
@@ -68,14 +68,14 @@ export function registerListTasks(server: McpServer) {
         let filtered = tasks as any[]
 
         if (args.tag) {
-          const tag = await resolveTag(project.id, args.tag)
+          const tag = await resolveTag(ctx.supabase, project.id, args.tag)
           filtered = filtered.filter((t: any) =>
             t.tags?.some((tt: any) => tt.tag?.id === tag.id)
           )
         }
 
         if (args.assignee) {
-          const member = await resolveAssignee(project.id, args.assignee)
+          const member = await resolveAssignee(ctx.supabase, project.id, args.assignee)
           const profileId = (member as any).profiles?.id ?? member.user_id
           filtered = filtered.filter((t: any) =>
             t.assignees?.some((ta: any) => ta.assignee?.id === profileId)
@@ -86,7 +86,6 @@ export function registerListTasks(server: McpServer) {
           return { content: [{ type: 'text' as const, text: 'No tasks found matching filters.' }] }
         }
 
-        // Flatten nested relations for formatting
         const lines = filtered.map((t: any) =>
           formatTaskLine(
             {

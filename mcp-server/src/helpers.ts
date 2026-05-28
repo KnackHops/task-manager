@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // ── Task ID parsing ─────────────────────────────────────────────────
 
@@ -18,7 +18,7 @@ export function isUUID(str: string): boolean {
 
 // ── Slug resolution ─────────────────────────────────────────────────
 
-export async function resolveProject(slug: string) {
+export async function resolveProject(supabase: SupabaseClient, slug: string) {
   const { data, error } = await supabase
     .from('projects')
     .select('*')
@@ -28,7 +28,7 @@ export async function resolveProject(slug: string) {
   return data
 }
 
-export async function resolveColumn(projectId: string, slug: string) {
+export async function resolveColumn(supabase: SupabaseClient, projectId: string, slug: string) {
   const { data, error } = await supabase
     .from('project_columns')
     .select('*')
@@ -39,7 +39,7 @@ export async function resolveColumn(projectId: string, slug: string) {
   return data
 }
 
-export async function resolveTag(projectId: string, slug: string) {
+export async function resolveTag(supabase: SupabaseClient, projectId: string, slug: string) {
   const { data, error } = await supabase
     .from('project_tags')
     .select('*')
@@ -50,8 +50,7 @@ export async function resolveTag(projectId: string, slug: string) {
   return data
 }
 
-export async function resolveSprint(projectId: string, name: string) {
-  // Support "active" as a special name
+export async function resolveSprint(supabase: SupabaseClient, projectId: string, name: string) {
   if (name.toLowerCase() === 'active') {
     const { data, error } = await supabase
       .from('sprints')
@@ -72,7 +71,7 @@ export async function resolveSprint(projectId: string, name: string) {
   return data
 }
 
-export async function resolveAssignee(projectId: string, name: string) {
+export async function resolveAssignee(supabase: SupabaseClient, projectId: string, name: string) {
   const { data, error } = await supabase
     .from('project_members')
     .select('user_id, profiles!inner(id, full_name, email)')
@@ -86,7 +85,7 @@ export async function resolveAssignee(projectId: string, name: string) {
 
 // ── Task resolution (handles NT-1 or UUID) ──────────────────────────
 
-export async function resolveTaskId(taskId: string): Promise<string> {
+export async function resolveTaskId(supabase: SupabaseClient, taskId: string): Promise<string> {
   if (isUUID(taskId)) return taskId
 
   const parsed = parseTaskId(taskId)

@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { supabase } from '../supabase.js'
+import type { RequestContext } from '../auth.js'
 import { resolveTaskId, formatTaskId } from '../helpers.js'
 
-export function registerGetTask(server: McpServer) {
+export function registerGetTask(server: McpServer, ctx: RequestContext) {
   server.tool(
     'get_task',
     `Get full details of a task by ID (e.g. "NT-1" or UUID). Returns description, route_path, column, tags, assignees, sprint, story points, recent comments, and attachment count. Check route_path for the page/URL this task relates to. If the description is vague, use add_comment to ask the reporter for clarification before attempting to investigate or fix.`,
@@ -13,9 +13,9 @@ export function registerGetTask(server: McpServer) {
     },
     async (args) => {
       try {
-        const taskUUID = await resolveTaskId(args.task_id)
+        const taskUUID = await resolveTaskId(ctx.supabase, args.task_id)
 
-        const { data: task, error } = await supabase
+        const { data: task, error } = await ctx.supabase
           .from('tasks')
           .select(`
             id, title, description, priority, task_number, story_points,
@@ -41,7 +41,7 @@ export function registerGetTask(server: McpServer) {
         const id = formatTaskId(prefix, t.task_number)
 
         // Fetch recent comments
-        const { data: comments } = await supabase
+        const { data: comments } = await ctx.supabase
           .from('comments')
           .select('id, body, created_at, updated_at, author:profiles!author_id(full_name, email)')
           .eq('task_id', taskUUID)

@@ -1,14 +1,13 @@
-import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { supabase } from '../supabase.js'
+import type { RequestContext } from '../auth.js'
 
-export function registerListProjects(server: McpServer) {
+export function registerListProjects(server: McpServer, ctx: RequestContext) {
   server.tool(
     'list_projects',
     'List all projects you are a member of. Returns project slugs, names, and prefixes for use with other tools.',
     {},
     async () => {
-      const { data, error } = await supabase
+      const { data, error } = await ctx.supabase
         .from('projects')
         .select('id, name, slug, prefix, project_members(count)')
         .order('name')

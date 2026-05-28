@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { supabase } from '../supabase.js'
+import type { RequestContext } from '../auth.js'
 import { resolveTaskId, formatTaskId } from '../helpers.js'
 
-export function registerAddComment(server: McpServer, userId: string) {
+export function registerAddComment(server: McpServer, ctx: RequestContext) {
   server.tool(
     'add_comment',
     `Add a comment to a task. Use this to ask clarifying questions when task context is insufficient — prefer asking over guessing. The comment author is the authenticated MCP user.`,
@@ -13,20 +13,20 @@ export function registerAddComment(server: McpServer, userId: string) {
     },
     async (args) => {
       try {
-        const taskUUID = await resolveTaskId(args.task_id)
+        const taskUUID = await resolveTaskId(ctx.supabase, args.task_id)
 
         // Get task info for response
-        const { data: task } = await supabase
+        const { data: task } = await ctx.supabase
           .from('tasks')
           .select('task_number, project:projects!project_id(prefix)')
           .eq('id', taskUUID)
           .single()
 
-        const { data: comment, error } = await supabase
+        const { data: comment, error } = await ctx.supabase
           .from('comments')
           .insert({
             task_id: taskUUID,
-            author_id: userId,
+            author_id: ctx.userId,
             body: args.body,
           })
           .select('id, created_at')
