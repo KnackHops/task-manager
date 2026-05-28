@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Trash2, Copy, Check, Key } from 'lucide-react'
 import { useApiKeys, useCreateApiKey, useRevokeApiKey } from '@/hooks/useApiKeys'
+import { MCP_URL } from '@/lib/constants'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { ApiKey } from '@/services/api-keys'
 
@@ -27,6 +28,7 @@ export function ApiKeyManager() {
   const [createdKey, setCreatedKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null)
+  const [configCopied, setConfigCopied] = useState(false)
 
   const handleCreate = () => {
     if (!newName.trim()) return
@@ -43,10 +45,25 @@ export function ApiKeyManager() {
 
   const handleCopy = async () => {
     if (!createdKey) return
-    await navigator.clipboard.writeText(createdKey)
-    setCopied(true)
-    toast.success('Copied to clipboard')
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(createdKey)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = createdKey
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      setCopied(true)
+      toast.success('Copied to clipboard')
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error('Failed to copy — select and copy manually')
+    }
   }
 
   const handleRevoke = () => {
@@ -190,6 +207,56 @@ export function ApiKeyManager() {
             </p>
           </div>
         )}
+      </div>
+
+      {/* Setup instructions */}
+      <div className="rounded-lg border border-border bg-muted/50 p-3 mt-4 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-foreground">MCP Client Setup</p>
+          <button
+            onClick={async () => {
+              const config = `"task-manager": {\n  "type": "streamableHttp",\n  "url": "${MCP_URL}",\n  "headers": {\n    "Authorization": "Bearer [API KEY]"\n  }\n}`
+              try {
+                if (navigator.clipboard && window.isSecureContext) {
+                  await navigator.clipboard.writeText(config)
+                } else {
+                  const textarea = document.createElement('textarea')
+                  textarea.value = config
+                  textarea.style.position = 'fixed'
+                  textarea.style.opacity = '0'
+                  document.body.appendChild(textarea)
+                  textarea.select()
+                  document.execCommand('copy')
+                  document.body.removeChild(textarea)
+                }
+                setConfigCopied(true)
+                toast.success('Copied to clipboard')
+                setTimeout(() => setConfigCopied(false), 2000)
+              } catch {
+                toast.error('Failed to copy')
+              }
+            }}
+            className="shrink-0 rounded-md border border-input p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            {configCopied ? (
+              <Check className="h-3 w-3 text-primary" />
+            ) : (
+              <Copy className="h-3 w-3" />
+            )}
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Add to your MCP config (replace key with your own):
+        </p>
+        <code className="block rounded bg-muted px-2 py-1.5 text-xs font-mono text-foreground whitespace-pre break-all">
+{`"task-manager": {
+  "type": "streamableHttp",
+  "url": "${MCP_URL}",
+  "headers": {
+    "Authorization": "Bearer [API KEY]"
+  }
+}`}
+        </code>
       </div>
 
       <ConfirmDialog
