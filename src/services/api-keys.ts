@@ -46,18 +46,18 @@ function sha256(msg: string): string {
   bytes.push(0, 0, 0, 0, (bitLen >>> 24) & 0xff, (bitLen >>> 16) & 0xff, (bitLen >>> 8) & 0xff, bitLen & 0xff)
   let [h0, h1, h2, h3, h4, h5, h6, h7] = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
   for (let off = 0; off < bytes.length; off += 64) {
-    const w = new Array<number>(64)
-    for (let i = 0; i < 16; i++) w[i] = (bytes[off + i * 4] << 24) | (bytes[off + i * 4 + 1] << 16) | (bytes[off + i * 4 + 2] << 8) | bytes[off + i * 4 + 3]
+    const w = new Int32Array(64)
+    for (let i = 0; i < 16; i++) w[i] = (bytes[off + i * 4]! << 24) | (bytes[off + i * 4 + 1]! << 16) | (bytes[off + i * 4 + 2]! << 8) | bytes[off + i * 4 + 3]!
     for (let i = 16; i < 64; i++) {
-      const s0 = rotr(7, w[i - 15]) ^ rotr(18, w[i - 15]) ^ (w[i - 15] >>> 3)
-      const s1 = rotr(17, w[i - 2]) ^ rotr(19, w[i - 2]) ^ (w[i - 2] >>> 10)
-      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0
+      const s0 = rotr(7, w[i - 15]!) ^ rotr(18, w[i - 15]!) ^ (w[i - 15]! >>> 3)
+      const s1 = rotr(17, w[i - 2]!) ^ rotr(19, w[i - 2]!) ^ (w[i - 2]! >>> 10)
+      w[i] = (w[i - 16]! + s0 + w[i - 7]! + s1) | 0
     }
     let [a, b, c, d, e, f, g, h] = [h0, h1, h2, h3, h4, h5, h6, h7]
     for (let i = 0; i < 64; i++) {
       const S1 = rotr(6, e) ^ rotr(11, e) ^ rotr(25, e)
       const ch = (e & f) ^ (~e & g)
-      const t1 = (h + S1 + ch + K[i] + w[i]) | 0
+      const t1 = (h + S1 + ch + K[i]! + w[i]!) | 0
       const S0 = rotr(2, a) ^ rotr(13, a) ^ rotr(22, a)
       const maj = (a & b) ^ (a & c) ^ (b & c)
       const t2 = (S0 + maj) | 0
