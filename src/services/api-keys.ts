@@ -79,11 +79,15 @@ function generateKey(): string {
 }
 
 export async function createApiKey(name: string): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
   const key = generateKey()
   const keyHash = await hashKey(key)
   const keyPrefix = key.slice(0, 8)
 
   const { error } = await supabase.from('api_keys').insert({
+    user_id: user.id,
     key_hash: keyHash,
     key_prefix: keyPrefix,
     name,
