@@ -6,7 +6,7 @@ import { resolveTaskId, formatTaskId } from '../helpers.js'
 export function registerGetTask(server: McpServer, ctx: RequestContext) {
   server.tool(
     'get_task',
-    `Get full details of a task by ID (e.g. "NT-1" or UUID). Returns description, route_path, column, tags, assignees, sprint, story points, recent comments, and attachment count. Check route_path for the page/URL this task relates to. If the description is vague, use add_comment to ask the reporter for clarification before attempting to investigate or fix.`,
+    `Get full details of a task by ID (e.g. "NT-1" or UUID). Returns description, route_path, column, tags, assignees, sprint, story points, recent comments, and attachments (with IDs for use with get_attachment_url). Check route_path for the page/URL this task relates to. If the description is vague, use add_comment to ask the reporter for clarification before attempting to investigate or fix.`,
     {
       task_id: z.string().describe('Task ID in prefix-number format (e.g. "NT-1") or UUID'),
       comment_limit: z.number().default(10).describe('Number of recent comments to include (default: 10)'),
@@ -27,7 +27,7 @@ export function registerGetTask(server: McpServer, ctx: RequestContext) {
             creator:profiles!created_by(id, full_name, email),
             project:projects!project_id(id, name, slug, prefix),
             comments(count),
-            attachments(count)
+            attachments(id, file_name, file_type, file_size)
           `)
           .eq('id', taskUUID)
           .single()
@@ -80,13 +80,25 @@ export function registerGetTask(server: McpServer, ctx: RequestContext) {
         lines.push(`**Updated:** ${t.updated_at}`)
 
         const commentCount = t.comments?.[0]?.count ?? 0
-        const attachmentCount = t.attachments?.[0]?.count ?? 0
-        lines.push(`**Comments:** ${commentCount} | **Attachments:** ${attachmentCount}`)
+        const attachments = (t.attachments ?? []) as any[]
+        lines.push(`**Comments:** ${commentCount} | **Attachments:** ${attachments.length}`)
 
         // Description
         lines.push('')
         lines.push('## Description')
         lines.push(t.description || '_No description provided._')
+
+        // Attachments
+        if (attachments.length > 0) {
+          lines.push('')
+          lines.push('## Attachments')
+          for (const a of attachments) {
+            const sizeKB = Math.round(a.file_size / 1024)
+            lines.push(`- **${a.file_name}** (${a.file_type}, ${sizeKB}KB) — ID: \`${a.id}\``)
+          }
+          lines.push('')
+          lines.push('_Use get_attachment_url with an attachment ID to get a download URL._')
+        }
 
         // Comments
         if (comments && comments.length > 0) {

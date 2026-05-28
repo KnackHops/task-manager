@@ -215,7 +215,7 @@ export function ApiKeyManager() {
           <p className="text-xs font-medium text-foreground">MCP Client Setup</p>
           <button
             onClick={async () => {
-              const config = `"task-manager": {\n  "type": "streamableHttp",\n  "url": "${MCP_URL}",\n  "headers": {\n    "Authorization": "Bearer [API KEY]"\n  }\n}`
+              const config = `"task-manager": {\n  "type": "http",\n  "url": "${MCP_URL}",\n  "headers": {\n    "Authorization": "Bearer [API KEY]"\n  }\n}`
               try {
                 if (navigator.clipboard && window.isSecureContext) {
                   await navigator.clipboard.writeText(config)
@@ -250,7 +250,7 @@ export function ApiKeyManager() {
         </p>
         <code className="block rounded bg-muted px-2 py-1.5 text-xs font-mono text-foreground whitespace-pre break-all">
 {`"task-manager": {
-  "type": "streamableHttp",
+  "type": "http",
   "url": "${MCP_URL}",
   "headers": {
     "Authorization": "Bearer [API KEY]"

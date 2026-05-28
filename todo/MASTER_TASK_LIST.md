@@ -501,7 +501,7 @@ All policies based on `project_members` table (not `profiles.role`):
 - [x] `mcp-server/` directory with `@modelcontextprotocol/sdk` + `@supabase/supabase-js` + `zod`
 - [x] `package.json` (type: module), `tsconfig.json` (ES2022, Node16 resolution)
 - [x] `src/supabase.ts` — client init (anon key), `authenticate()` via `signInWithPassword()`
-- [x] `src/index.ts` — server setup, auth on startup, register all 8 tools, stdio transport
+- [x] `src/index.ts` — server setup, auth on startup, register all 8 tools (converted to Streamable HTTP in Phase 14.9)
 - [x] `src/helpers.ts` — `parseTaskId` (NT-1 or UUID), `resolveProject`, `resolveColumn`, `resolveTag`, `resolveSprint` ("active" keyword), `resolveAssignee`, `resolveTaskId`, `formatTaskId`, `formatTaskLine`
 
 ### 12.2 Read-only Tools
@@ -572,7 +572,7 @@ search_tasks project=nonstop query="email template"   → search by text
 - [x] Pagination / virtualization
 - [ ] Security audit
 - [ ] MCP `read_attachment` tool — auto-download + extract zip attachments (prototypes), return file tree + contents to agent in one call. Eliminates manual download/extract/read workflow
-- [ ] MCP Streamable HTTP transport — convert stdio → Streamable HTTP, deploy as service on Coolify, API key auth. Frontend UI for generating/managing API keys per user. Devs just add a URL to MCP config, no local build needed
+- [x] MCP Streamable HTTP transport — convert stdio → Streamable HTTP, deploy as service on Coolify, API key auth. Frontend UI for generating/managing API keys per user. Devs just add a URL to MCP config, no local build needed
 
 ---
 
@@ -839,6 +839,41 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
+## PHASE 14.9: MCP STREAMABLE HTTP + API KEYS ✅ COMPLETE
+
+> Converted MCP server from stdio → Streamable HTTP transport. Deployed as standalone service on Coolify. API key auth replaces email/password. Frontend UI for generating/managing API keys. Devs add a URL + Bearer token to MCP config — no local build needed.
+
+### 14.9.1 Streamable HTTP Transport
+- [x] `mcp-server/src/index.ts` — Express app via `createMcpExpressApp`, stateless POST `/mcp` endpoint
+- [x] `StreamableHTTPServerTransport` — each request creates fresh server + transport, cleans up on response close
+- [x] GET/DELETE `/mcp` return 405 (stateless mode, no sessions)
+- [x] `ws` package — WebSocket polyfill for Node 20 (no native WebSocket), registered as `globalThis.WebSocket` before Supabase imports
+
+### 14.9.2 API Key Authentication
+- [x] `mcp-server/src/auth.ts` — `authenticateApiKey(key)`: SHA-256 hash lookup → admin getUserById → magic link generation → verifyOtp → user-scoped Supabase client (RLS enforced)
+- [x] Session cache: `Map<keyHash, { ctx, expiresAt }>`, 55min TTL (Supabase sessions last 1hr)
+- [x] `last_used_at` updated on each use (fire and forget)
+- [x] `mcp-server/src/supabase.ts` — `createAdminClient()` (service role key), `createAnonClient()` (anon key)
+
+### 14.9.3 Database — API Keys Table
+- [x] `supabase/migrations/018_api_keys.sql` — `api_keys` table (id, user_id, key_hash, key_prefix, name, created_at, last_used_at, revoked_at)
+- [x] Index on `key_hash` WHERE `revoked_at IS NULL`
+- [x] RLS: users manage own keys only
+
+### 14.9.4 Frontend — API Key Management
+- [x] `src/services/api-keys.ts` — `generateKey()` (tm_ prefix + 16 bytes hex), `hashKey()` (Web Crypto SHA-256 + JS fallback), `createApiKey`, `listApiKeys`, `revokeApiKey`
+- [x] `src/hooks/useApiKeys.ts` — `useApiKeys`, `useCreateApiKey`, `useRevokeApiKey` (React Query)
+- [x] `src/components/settings/ApiKeyManager.tsx` — create key form, one-time key display with copy, key list with prefix/dates, revoke with ConfirmDialog, MCP config snippet with copy button
+- [x] `src/routes/_app/settings.tsx` — user settings page with ApiKeyManager
+- [x] Sidebar — Settings link (Settings icon) in non-project context
+
+### 14.9.5 Deployment
+- [x] `mcp-server/Dockerfile` — multi-stage build (node:20-alpine build → node:20-alpine runtime), port 3000
+- [x] Deployed on Coolify as separate service, env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- [x] MCP config: `{ "type": "http", "url": "<coolify-url>/mcp", "headers": { "Authorization": "Bearer <key>" } }`
+
+---
+
 ## PHASE 14.8: PENDING INVITES + AUTH EMAIL FIX (OPTIONAL) — TODO
 
 > Allow inviting users who haven't signed up yet. They receive an email, and on registration are auto-added to the project.
@@ -870,7 +905,7 @@ task-manager/
 │   │   ├── sprint-analytics/ # SprintSummaryCard.tsx, BurndownChart.tsx, VelocityChart.tsx
 │   │   ├── task/             # CreateTaskDialog.tsx, TaskDetailPanel.tsx
 │   │   ├── project/          # CreateProjectDialog.tsx, ProjectSwitcher.tsx
-│   │   ├── settings/         # ProjectGeneralSettings.tsx, ColumnManager.tsx, TagManager.tsx, MemberManager.tsx, SprintManager.tsx, DangerZone.tsx
+│   │   ├── settings/         # ProjectGeneralSettings.tsx, ColumnManager.tsx, TagManager.tsx, MemberManager.tsx, SprintManager.tsx, DangerZone.tsx, ApiKeyManager.tsx
 │   │   ├── layout/           # AppShell.tsx, Sidebar.tsx, Header.tsx
 │   │   └── ui/               # Badge.tsx, Dialog.tsx, ConfirmDialog.tsx, Select.tsx, Avatar.tsx, TagSelect.tsx, AssigneeSelect.tsx, ColorPicker.tsx
 │   ├── contexts/
@@ -890,6 +925,7 @@ task-manager/
 │   │   ├── useSprints.ts     # useSprints, useCreateSprint, useUpdateSprint, useDeleteSprint, useCompleteSprint
 │   │   ├── useSprintAnalytics.ts # useSprintSummary, useSprintBurndown, useVelocity
 │   │   ├── useBulkAssignSprint.ts # useBulkAssignSprint (bulk assign tasks to sprint)
+│   │   ├── useApiKeys.ts     # useApiKeys, useCreateApiKey, useRevokeApiKey
 │   │   └── useProfiles.ts
 │   ├── services/
 │   │   ├── projects.ts
@@ -903,6 +939,7 @@ task-manager/
 │   │   ├── notifications.ts  # fetchNotifications, unreadCount, markAsRead, markAllAsRead
 │   │   ├── sprints.ts        # fetchSprints, createSprint, updateSprint, deleteSprint, completeSprint (auto-archives done), autoAssignTasksToSprint
 │   │   ├── sprint-analytics.ts # fetchSprintSummary, fetchSprintBurndown, fetchVelocity
+│   │   ├── api-keys.ts       # generateKey, hashKey, createApiKey, listApiKeys, revokeApiKey
 │   │   └── profiles.ts
 │   ├── lib/
 │   │   ├── supabase.ts       # lockAcquireTimeout fix
@@ -924,6 +961,7 @@ task-manager/
 │   │       ├── route.tsx       # Auth guard
 │   │       ├── projects.tsx    # Project list
 │   │       ├── invites.tsx     # Pending invites page
+│   │       ├── settings.tsx    # User settings (API key management)
 │   │       ├── sprints.tsx     # Global sprints placeholder
 │   │       └── p/
 │   │           ├── $slug.tsx       # Project layout + ProjectProvider
@@ -952,18 +990,21 @@ task-manager/
 │       ├── 014_invite_status.sql
 │       ├── 015_user_deletion_safety.sql
 │       ├── 016_member_notification_types.sql
-│       └── 017_notifications_insert_policy.sql
+│       ├── 017_notifications_insert_policy.sql
+│       └── 018_api_keys.sql
 ├── .env.example
 ├── .env.local
 ├── vite.config.ts
 ├── tsconfig.json
 ├── package.json
-├── mcp-server/              # MCP server for AI agent access
+├── mcp-server/              # MCP server (Streamable HTTP, deployed on Coolify)
 │   ├── package.json
 │   ├── tsconfig.json
+│   ├── Dockerfile           # Multi-stage Node 20 build
 │   └── src/
-│       ├── index.ts         # Server setup, auth, stdio transport
-│       ├── supabase.ts      # Supabase client (anon key + user auth)
+│       ├── index.ts         # Express + StreamableHTTPServerTransport, stateless POST /mcp
+│       ├── auth.ts          # API key auth, magic link sessions, 55min cache
+│       ├── supabase.ts      # Admin + anon Supabase clients
 │       ├── helpers.ts       # Task ID parsing, slug resolution
 │       └── tools/           # One file per MCP tool
 └── todo/

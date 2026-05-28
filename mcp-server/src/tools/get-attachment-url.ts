@@ -5,7 +5,7 @@ import type { RequestContext } from '../auth.js'
 export function registerGetAttachmentUrl(server: McpServer, ctx: RequestContext) {
   server.tool(
     'get_attachment_url',
-    'Get a signed download URL for an attachment. URL expires in 1 hour.',
+    'Get a signed download URL for an attachment (use attachment IDs from get_task output). URL expires in 1 hour. Use this to download files to the user\'s machine — always ask the user where to save the file if they haven\'t specified a path.',
     {
       attachment_id: z.string().describe('Attachment UUID'),
     },
