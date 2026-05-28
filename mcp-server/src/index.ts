@@ -11,6 +11,7 @@ import { registerListTasks } from './tools/list-tasks.js'
 import { registerGetTask } from './tools/get-task.js'
 import { registerSearchTasks } from './tools/search-tasks.js'
 import { registerGetAttachmentUrl } from './tools/get-attachment-url.js'
+import { registerReadAttachment } from './tools/read-attachment.js'
 import { registerCreateTask } from './tools/create-task.js'
 import { registerUpdateTask } from './tools/update-task.js'
 import { registerAddComment } from './tools/add-comment.js'
@@ -28,6 +29,7 @@ function createServer(ctx: RequestContext): McpServer {
   registerGetTask(server, ctx)
   registerSearchTasks(server, ctx)
   registerGetAttachmentUrl(server, ctx)
+  registerReadAttachment(server, ctx)
   registerCreateTask(server, ctx)
   registerUpdateTask(server, ctx)
   registerAddComment(server, ctx)
