@@ -24,7 +24,6 @@ export function registerUpdateTask(server: McpServer, ctx: RequestContext) {
       sprint: z.string().nullable().optional().describe('Sprint name, "active", or null to remove'),
       story_points: z.number().nullable().optional().describe('Story points (null to clear)'),
       route_path: z.string().nullable().optional().describe('URL or path (null to clear)'),
-      archived: z.boolean().optional().describe('Archive or unarchive'),
     },
     async (args) => {
       try {
@@ -64,11 +63,6 @@ export function registerUpdateTask(server: McpServer, ctx: RequestContext) {
             const sprint = await resolveSprint(ctx.supabase, projectId, args.sprint)
             update.sprint_id = sprint.id
           }
-        }
-
-        if (args.archived !== undefined) {
-          update.archived = args.archived
-          update.archived_at = args.archived ? new Date().toISOString() : null
         }
 
         // Apply update
