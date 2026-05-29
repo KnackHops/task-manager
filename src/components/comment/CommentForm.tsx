@@ -4,8 +4,9 @@ import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { useMembers } from '@/hooks/useMembers'
 import { useCreateComment } from '@/hooks/useComments'
-import { useUploadAttachment } from '@/hooks/useAttachments'
-import { reassignAttachmentsToComment } from '@/services/attachments'
+import { attachmentKeys } from '@/hooks/useAttachments'
+import { useQueryClient } from '@tanstack/react-query'
+import { assignAttachmentsToComment, copyAttachment, uploadAttachment as uploadAttachmentRaw } from '@/services/attachments'
 import { FILE_SIZE_LIMIT, formatFileSize, extractClipboardFiles, isImageType } from '@/lib/file-utils'
 import {
   INLINE_IMG_ATTR,
@@ -15,6 +16,8 @@ import {
   handleEditorBackspace,
   insertPastedImage,
   handleAttachmentDrop,
+  placeCaretAtDropPoint,
+  type AttachmentDropData,
 } from '@/lib/rich-editor'
 import { MentionDropdown } from './MentionDropdown'
 import type { ProjectMemberWithProfile } from '@/types/database'
@@ -27,8 +30,8 @@ interface CommentFormProps {
 export function CommentForm({ taskId, projectId }: CommentFormProps) {
   const { user } = useAuth()
   const { data: members } = useMembers(projectId)
+  const queryClient = useQueryClient()
   const createComment = useCreateComment(taskId)
-  const uploadAttachment = useUploadAttachment(taskId)
 
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [isEmpty, setIsEmpty] = useState(true)
@@ -38,6 +41,8 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Map temp inline IDs → File for pasted images
   const inlineImagesRef = useRef<Map<string, File>>(new Map())
+  // Track existing attachments dropped into editor (original ID → drop data)
+  const droppedExistingRef = useRef<Map<string, AttachmentDropData>>(new Map())
 
   const checkEmpty = useCallback(() => {
     if (!editorRef.current) return
@@ -155,24 +160,21 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
     if (!el || !user) return
     const rawBody = extractRawBody(el).trim()
     const hasInlineImages = inlineImagesRef.current.size > 0
-    if (!rawBody && stagedFiles.length === 0 && !hasInlineImages) return
+    const hasDropped = droppedExistingRef.current.size > 0
+    if (!rawBody && stagedFiles.length === 0 && !hasInlineImages && !hasDropped) return
 
     setSubmitting(true)
     try {
-      // Step 1: Upload inline images as task attachments (before comment exists)
       let finalBody = rawBody || '(attachment)'
-      const inlineAttachmentIds: string[] = []
+      const orphanIds: string[] = []
 
+      // Step 1: Upload inline images as orphans (no task_id, no comment_id)
       if (hasInlineImages) {
         for (const [tempId, file] of inlineImagesRef.current.entries()) {
           try {
-            const attachment = await uploadAttachment.mutateAsync({
-              file,
-              uploadedBy: user.id,
-              target: { taskId },
-            })
+            const attachment = await uploadAttachmentRaw(file, user.id, 'orphan')
             finalBody = finalBody.replace(`![](${tempId})`, `![](${attachment.id})`)
-            inlineAttachmentIds.push(attachment.id)
+            orphanIds.push(attachment.id)
           } catch (err) {
             toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
             finalBody = finalBody.replace(`![](${tempId})`, '')
@@ -181,48 +183,94 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
         finalBody = finalBody.trim() || '(attachment)'
       }
 
-      // Step 2: Create comment with final body (real attachment IDs already in place)
+      // Step 2: Copy dragged attachments as orphans
+      if (hasDropped) {
+        for (const [origId, attData] of droppedExistingRef.current.entries()) {
+          // Skip if user deleted the inline reference
+          if (!finalBody.includes(`(${origId})`)) continue
+          try {
+            const copied = await copyAttachment(
+              attData.storagePath,
+              user.id,
+              attData.fileName,
+              attData.fileType,
+              attData.fileSize ?? 0,
+              'orphan',
+            )
+            finalBody = finalBody.split(`![](${origId})`).join(`![](${copied.id})`)
+            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join(`%[${attData.fileName}](${copied.id})`)
+            orphanIds.push(copied.id)
+          } catch (err) {
+            toast.error(`Failed to copy ${attData.fileName}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+            finalBody = finalBody.split(`![](${origId})`).join('')
+            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join('')
+          }
+        }
+        finalBody = finalBody.trim() || '(attachment)'
+      }
+
+      // Step 3: Create comment with final body (real attachment IDs already in place)
       const comment = await createComment.mutateAsync({
         authorId: user.id,
         body: finalBody,
       })
 
-      // Step 3: Reassign inline attachments from task → comment
-      if (inlineAttachmentIds.length > 0) {
-        await reassignAttachmentsToComment(inlineAttachmentIds, comment.id)
+      // Step 4: Assign orphan attachments to the new comment
+      if (orphanIds.length > 0) {
+        await assignAttachmentsToComment(orphanIds, comment.id)
+        await queryClient.invalidateQueries({ queryKey: attachmentKeys.comment(comment.id) })
       }
 
-      // Step 4: Upload non-inline staged files with commentId
+      // Step 5: Upload staged files directly to comment
+      const inlineFiles = new Set(inlineImagesRef.current.values())
       for (const file of stagedFiles) {
+        if (inlineFiles.has(file)) continue
         try {
-          await uploadAttachment.mutateAsync({
-            file,
-            uploadedBy: user.id,
-            target: { commentId: comment.id },
-          })
+          await uploadAttachmentRaw(file, user.id, { commentId: comment.id })
         } catch (err) {
           toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
         }
+      }
+      if (stagedFiles.length > 0) {
+        await queryClient.invalidateQueries({ queryKey: attachmentKeys.comment(comment.id) })
       }
 
       el.innerHTML = ''
       setIsEmpty(true)
       setStagedFiles([])
       inlineImagesRef.current.clear()
+      droppedExistingRef.current.clear()
       setMentionQuery(null)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to post comment')
     } finally {
       setSubmitting(false)
     }
-  }, [user, taskId, createComment, uploadAttachment, stagedFiles])
+  }, [user, createComment, stagedFiles, queryClient])
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
-      const handled = await handleAttachmentDrop(e, checkEmpty)
-      if (!handled) return // let browser handle normal drops
+      // Check for staged file drag (from chips below editor)
+      const stagedIndex = e.dataTransfer.getData('application/staged-file-index')
+      if (stagedIndex) {
+        e.preventDefault()
+        const index = parseInt(stagedIndex, 10)
+        const file = stagedFiles[index]
+        if (!file || !isImageType(file.type)) return
+        placeCaretAtDropPoint(e)
+        insertPastedImage(file, inlineImagesRef.current)
+        checkEmpty()
+        return
+      }
+
+      // Check for existing attachment drag
+      const attData = await handleAttachmentDrop(e, checkEmpty)
+      if (attData) {
+        droppedExistingRef.current.set(attData.id, attData)
+        return
+      }
     },
-    [checkEmpty]
+    [checkEmpty, stagedFiles]
   )
 
   const handleKeyDown = useCallback(
@@ -264,7 +312,7 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
             role="textbox"
             aria-multiline="true"
             aria-placeholder="Add a comment... (@ to mention)"
-            className="min-h-[4.75rem] max-h-48 overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&_img]:max-w-full [&_img]:rounded-lg"
+            className="min-h-[4.75rem] rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset [&_img]:max-w-full [&_img]:rounded-lg"
           />
           {isEmpty && stagedFiles.length === 0 && (
             <div className="pointer-events-none absolute left-3 top-2 text-sm text-muted-foreground">
@@ -306,7 +354,12 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
           {stagedFiles.map((file, i) => (
             <div
               key={`${file.name}-${i}`}
-              className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/staged-file-index', String(i))
+                e.dataTransfer.effectAllowed = 'move'
+              }}
+              className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground cursor-grab"
             >
               <Paperclip className="h-3 w-3" />
               <span className="max-w-[120px] truncate">{file.name}</span>

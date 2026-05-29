@@ -22,7 +22,8 @@ import { useMembers } from '@/hooks/useMembers'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import { CommentList } from '@/components/comment/CommentList'
 import { AttachmentList } from '@/components/attachment/AttachmentList'
-import { useUploadAttachment, useTaskAttachments } from '@/hooks/useAttachments'
+import { useUploadAttachment, useTaskAttachments, attachmentKeys } from '@/hooks/useAttachments'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
 import { parseBody, getFirstName } from '@/lib/mentions'
 import { extractClipboardFiles, isImageType, FILE_SIZE_LIMIT, formatFileSize } from '@/lib/file-utils'
@@ -32,7 +33,9 @@ import {
   insertPastedImage,
   handleAttachmentDrop,
   populateEditorFromBody,
+  type AttachmentDropData,
 } from '@/lib/rich-editor'
+import { copyAttachment } from '@/services/attachments'
 import { InlineCommentImage } from '@/components/comment/InlineCommentImage'
 import { InlineFileLink } from '@/components/comment/InlineFileLink'
 import { MentionPopover } from '@/components/comment/MentionPopover'
@@ -75,6 +78,7 @@ export function TaskDetailPanel({
   const { data: sprints } = useSprints(projectId)
   const { data: members } = useMembers(projectId)
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const uploadAttachment = useUploadAttachment(taskId)
   const { data: taskAttachments } = useTaskAttachments(taskId)
 
@@ -88,6 +92,31 @@ export function TaskDetailPanel({
   })
   const descEditorRef = useRef<HTMLDivElement>(null)
   const inlineImagesRef = useRef<Map<string, File>>(new Map())
+  const droppedExistingRef = useRef<Map<string, AttachmentDropData>>(new Map())
+  const commentFormNodeRef = useRef<HTMLDivElement | null>(null)
+  const scrollWrapperRef = useRef<HTMLDivElement>(null)
+  const roRef = useRef<ResizeObserver | null>(null)
+
+  // Callback ref: attaches ResizeObserver when comment form mounts
+  const commentFormRef = useCallback((node: HTMLDivElement | null) => {
+    commentFormNodeRef.current = node
+    if (roRef.current) {
+      roRef.current.disconnect()
+      roRef.current = null
+    }
+    if (!node) return
+
+    const ro = new ResizeObserver(() => {
+      const wrapper = scrollWrapperRef.current
+      if (!wrapper) return
+      const editor = node.querySelector<HTMLElement>('[contenteditable]')
+      if (!editor || !editor.contains(document.activeElement)) return
+      wrapper.scrollTo({ top: wrapper.scrollHeight, behavior: 'instant' })
+    })
+
+    ro.observe(node)
+    roRef.current = ro
+  }, [])
 
   const memberMap = useMemo(() => {
     const map = new Map<string, { fullName: string; email: string }>()
@@ -150,7 +179,10 @@ export function TaskDetailPanel({
 
   const handleDescDrop = useCallback(
     async (e: React.DragEvent) => {
-      await handleAttachmentDrop(e, () => {})
+      const attData = await handleAttachmentDrop(e, () => {})
+      if (attData) {
+        droppedExistingRef.current.set(attData.id, attData)
+      }
     },
     []
   )
@@ -214,6 +246,7 @@ export function TaskDetailPanel({
   const startEditingDesc = async () => {
     setIsEditingDesc(true)
     inlineImagesRef.current.clear()
+    droppedExistingRef.current.clear()
     requestAnimationFrame(async () => {
       if (descEditorRef.current) {
         await populateEditorFromBody(
@@ -238,6 +271,7 @@ export function TaskDetailPanel({
       let finalBody = extractRawBody(el).trim()
 
       // Upload new inline images (temp → real)
+      const newAttachIds = new Set<string>()
       if (inlineImagesRef.current.size > 0) {
         for (const [tempId, file] of inlineImagesRef.current.entries()) {
           try {
@@ -247,6 +281,7 @@ export function TaskDetailPanel({
               target: { taskId },
             })
             finalBody = finalBody.replace(`![](${tempId})`, `![](${attachment.id})`)
+            newAttachIds.add(attachment.id)
           } catch (err) {
             toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
             finalBody = finalBody.replace(`![](${tempId})`, '')
@@ -255,11 +290,54 @@ export function TaskDetailPanel({
         finalBody = finalBody.trim()
       }
 
+      // Copy existing attachments dropped from other sources
+      if (droppedExistingRef.current.size > 0) {
+        for (const [origId, attData] of droppedExistingRef.current.entries()) {
+          try {
+            const copied = await copyAttachment(
+              attData.storagePath,
+              user.id,
+              attData.fileName,
+              attData.fileType,
+              attData.fileSize ?? 0,
+              { taskId },
+            )
+            finalBody = finalBody.split(`![](${origId})`).join(`![](${copied.id})`)
+            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join(`%[${attData.fileName}](${copied.id})`)
+            newAttachIds.add(copied.id)
+          } catch (err) {
+            toast.error(`Failed to copy ${attData.fileName}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+            finalBody = finalBody.split(`![](${origId})`).join('')
+            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join('')
+          }
+        }
+        finalBody = finalBody.trim()
+        await queryClient.invalidateQueries({ queryKey: attachmentKeys.task(taskId) })
+      }
+
+      // Strip inline refs to deleted attachments
+      const currentAttachIds = new Set((taskAttachments ?? []).map((a) => a.id))
+      finalBody = finalBody.replace(/!\[\]\(([^)]+)\)/g, (match, id) => {
+        if (id.startsWith('temp-')) return match
+        if (currentAttachIds.has(id)) return match
+        if (newAttachIds.has(id)) return match
+        if (droppedExistingRef.current.has(id)) return match
+        return ''
+      })
+      finalBody = finalBody.replace(/%\[[^\]]*\]\(([^)]+)\)/g, (match, id) => {
+        if (currentAttachIds.has(id)) return match
+        if (newAttachIds.has(id)) return match
+        if (droppedExistingRef.current.has(id)) return match
+        return ''
+      })
+      finalBody = finalBody.trim()
+
       if (finalBody !== (task.description ?? '')) {
         handleFieldUpdate('description', finalBody || null)
       }
     } finally {
       inlineImagesRef.current.clear()
+      droppedExistingRef.current.clear()
       setIsEditingDesc(false)
     }
   }
@@ -338,7 +416,7 @@ export function TaskDetailPanel({
   const descSegments = task.description ? parseBody(task.description) : null
 
   return (
-    <Dialog open onClose={onClose} className="max-w-[calc(100vw-2rem)] sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+    <Dialog open onClose={onClose} className="max-w-[calc(100vw-2rem)] sm:max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
       <DialogHeader>
         <div className="flex items-center gap-2 pr-8">
           {project.prefix && (
@@ -368,6 +446,7 @@ export function TaskDetailPanel({
         </div>
       </DialogHeader>
 
+      <div ref={scrollWrapperRef} className="overflow-y-auto flex-1 min-h-0">
       <div className="space-y-4">
         {/* Description */}
         <div>
@@ -384,12 +463,14 @@ export function TaskDetailPanel({
               onKeyDown={handleDescKeyDown}
               onDrop={handleDescDrop}
               onDragOver={(e) => e.preventDefault()}
-              className="mt-1 w-full min-h-[200px] max-h-64 overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&_img]:max-w-full [&_img]:rounded-lg"
+              className="mt-1 w-full min-h-[200px] max-h-64 overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset [&_img]:max-w-full [&_img]:rounded-lg"
             />
           ) : (
             <div
               key="desc-read"
               onClick={() => canEditTask && startEditingDesc()}
+              onDragOver={canEditTask ? (e) => e.preventDefault() : undefined}
+              onDragEnter={canEditTask ? (e) => { e.preventDefault(); startEditingDesc() } : undefined}
               className={`mt-1 min-h-[120px] rounded-lg border border-transparent px-3 py-2 text-sm text-foreground whitespace-pre-wrap break-words ${canEditTask ? 'hover:border-border transition-colors cursor-pointer' : ''}`}
             >
               {descSegments ? (
@@ -633,10 +714,25 @@ export function TaskDetailPanel({
 
       {/* Comments */}
       <div className="mt-6 border-t border-border pt-4">
-        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          Comments
-        </h3>
-        <CommentList taskId={taskId} projectId={projectId} />
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+            Comments
+          </h3>
+          <button
+            type="button"
+            onClick={() => {
+              commentFormNodeRef.current?.scrollIntoView({ behavior: 'smooth' })
+              setTimeout(() => {
+                commentFormNodeRef.current?.querySelector<HTMLDivElement>('[contenteditable]')?.focus()
+              }, 300)
+            }}
+            className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+          >
+            Reply
+          </button>
+        </div>
+        <CommentList ref={commentFormRef} taskId={taskId} projectId={projectId} />
+      </div>
       </div>
 
       <ConfirmDialog

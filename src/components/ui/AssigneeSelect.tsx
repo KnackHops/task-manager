@@ -9,6 +9,7 @@ interface AssigneeSelectProps {
   selectedIds: string[]
   onChange: (ids: string[]) => void
   label?: string
+  position?: 'top' | 'bottom'
 }
 
 export function AssigneeSelect({
@@ -16,6 +17,7 @@ export function AssigneeSelect({
   selectedIds,
   onChange,
   label,
+  position = 'bottom',
 }: AssigneeSelectProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -94,7 +96,10 @@ export function AssigneeSelect({
       </div>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover p-1 shadow-lg">
+        <div className={cn(
+          "absolute z-50 w-full rounded-lg border border-border bg-popover p-1 shadow-lg",
+          position === 'top' ? 'bottom-full mb-1' : 'mt-1'
+        )}>
           {members.map((m) => (
             <button
               key={m.user_id}

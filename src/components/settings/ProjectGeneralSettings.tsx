@@ -5,7 +5,7 @@ import { useUpdateColumn } from '@/hooks/useColumns'
 import { useProjectContext } from '@/contexts/ProjectContext'
 
 export function ProjectGeneralSettings() {
-  const { project, columns, doneColumnIds } = useProjectContext()
+  const { project, columns, doneColumnIds, isOwner } = useProjectContext()
   const updateProject = useUpdateProject(project.slug)
   const updateColumn = useUpdateColumn(project.id, project.slug)
 
@@ -89,7 +89,8 @@ export function ProjectGeneralSettings() {
             onChange={(e) => setPrefix(e.target.value.toUpperCase())}
             placeholder="e.g. NT"
             maxLength={6}
-            className="w-full sm:w-32 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground font-mono"
+            disabled={!isOwner}
+            className="w-full sm:w-32 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground font-mono disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <p className="text-xs text-muted-foreground mt-1">
             Tasks will display as {prefix ? `${prefix}-1` : '—'}
@@ -104,7 +105,8 @@ export function ProjectGeneralSettings() {
           <select
             value={defaultColumnId}
             onChange={(e) => setDefaultColumnId(e.target.value)}
-            className="w-full sm:w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+            disabled={!isOwner}
+            className="w-full sm:w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">None (first column)</option>
             {columns.map((col) => (
@@ -129,7 +131,8 @@ export function ProjectGeneralSettings() {
               setSprintColumnId(e.target.value)
               if (!e.target.value) setAutoAssignSprint(false)
             }}
-            className="w-full sm:w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+            disabled={!isOwner}
+            className="w-full sm:w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">None</option>
             {columns.map((col) => (
@@ -150,7 +153,7 @@ export function ProjectGeneralSettings() {
               type="checkbox"
               checked={autoAssignSprint}
               onChange={(e) => setAutoAssignSprint(e.target.checked)}
-              disabled={!sprintColumnId}
+              disabled={!sprintColumnId || !isOwner}
               className="accent-primary"
             />
             <span className="text-sm text-foreground">
@@ -170,7 +173,8 @@ export function ProjectGeneralSettings() {
           <select
             value={completedColumnId}
             onChange={(e) => setCompletedColumnId(e.target.value)}
-            className="w-full sm:w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+            disabled={!isOwner}
+            className="w-full sm:w-48 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">None</option>
             {columns.map((col) => (
@@ -191,6 +195,7 @@ export function ProjectGeneralSettings() {
               type="checkbox"
               checked={autoArchiveDone}
               onChange={(e) => setAutoArchiveDone(e.target.checked)}
+              disabled={!isOwner}
               className="accent-primary"
             />
             <span className="text-sm text-foreground">
@@ -203,13 +208,19 @@ export function ProjectGeneralSettings() {
         </div>
 
         {/* Save */}
-        <button
-          onClick={handleSave}
-          disabled={!hasChanges || updateProject.isPending}
-          className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          {updateProject.isPending ? 'Saving...' : 'Save'}
-        </button>
+        {isOwner ? (
+          <button
+            onClick={handleSave}
+            disabled={!hasChanges || updateProject.isPending}
+            className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {updateProject.isPending ? 'Saving...' : 'Save'}
+          </button>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Only the project owner can change these settings.
+          </p>
+        )}
       </div>
     </div>
   )

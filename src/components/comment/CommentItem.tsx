@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
 import { Pencil, Trash2, Paperclip, X } from 'lucide-react'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Avatar } from '@/components/ui/Avatar'
 import { AttachmentItem } from '@/components/attachment/AttachmentItem'
 import { parseBody, getFirstName } from '@/lib/mentions'
@@ -11,8 +12,11 @@ import {
   handleEditorBackspace,
   insertPastedImage,
   handleAttachmentDrop,
+  placeCaretAtDropPoint,
   populateEditorFromBody,
+  type AttachmentDropData,
 } from '@/lib/rich-editor'
+import { copyAttachment } from '@/services/attachments'
 import {
   DragDropContext,
   Droppable,
@@ -24,7 +28,9 @@ import {
   useDeleteAttachment,
   useUploadAttachment,
   useReorderAttachments,
+  attachmentKeys,
 } from '@/hooks/useAttachments'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
@@ -36,7 +42,7 @@ interface CommentItemProps {
   isOwn: boolean
   members: ProjectMemberWithProfile[]
   taskAttachments?: AttachmentWithUploader[]
-  onEdit: (commentId: string, body: string) => void
+  onEdit: (commentId: string, body: string) => Promise<void> | void
   onDelete: (commentId: string) => void
 }
 
@@ -49,7 +55,9 @@ export function CommentItem({
   onDelete,
 }: CommentItemProps) {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const [saving, setSaving] = useState(false)
   const { data: attachments } = useCommentAttachments(comment.id)
@@ -59,6 +67,7 @@ export function CommentItem({
   const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inlineImagesRef = useRef<Map<string, File>>(new Map())
+  const droppedExistingRef = useRef<Map<string, AttachmentDropData>>(new Map())
 
   const isEdited = comment.updated_at !== comment.created_at
   const segments = parseBody(comment.body)
@@ -83,6 +92,7 @@ export function CommentItem({
   const startEditing = useCallback(async () => {
     setEditing(true)
     inlineImagesRef.current.clear()
+    droppedExistingRef.current.clear()
     // Wait for DOM to render the contentEditable div
     requestAnimationFrame(async () => {
       if (editorRef.current) {
@@ -144,9 +154,23 @@ export function CommentItem({
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
-      await handleAttachmentDrop(e, () => {})
+      const stagedIndex = e.dataTransfer.getData('application/staged-file-index')
+      if (stagedIndex) {
+        e.preventDefault()
+        const index = parseInt(stagedIndex, 10)
+        const file = stagedFiles[index]
+        if (!file || !isImageType(file.type)) return
+        placeCaretAtDropPoint(e)
+        insertPastedImage(file, inlineImagesRef.current)
+        return
+      }
+
+      const attData = await handleAttachmentDrop(e, () => {})
+      if (attData) {
+        droppedExistingRef.current.set(attData.id, attData)
+      }
     },
-    []
+    [stagedFiles]
   )
 
   const handleSave = async () => {
@@ -156,20 +180,19 @@ export function CommentItem({
     setSaving(true)
     try {
       let finalBody = extractRawBody(el).trim()
+      const newAttachIds = new Set<string>()
 
       // Upload new inline images (temp IDs → real IDs)
       if (inlineImagesRef.current.size > 0) {
-        const inlineAttachmentIds: string[] = []
         for (const [tempId, file] of inlineImagesRef.current.entries()) {
           try {
-            // Upload as task attachment first (comment already exists but we need parent)
             const attachment = await uploadAttach.mutateAsync({
               file,
               uploadedBy: user.id,
               target: { commentId: comment.id },
             })
             finalBody = finalBody.replace(`![](${tempId})`, `![](${attachment.id})`)
-            inlineAttachmentIds.push(attachment.id)
+            newAttachIds.add(attachment.id)
           } catch (err) {
             toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
             finalBody = finalBody.replace(`![](${tempId})`, '')
@@ -178,12 +201,56 @@ export function CommentItem({
         finalBody = finalBody.trim() || comment.body
       }
 
-      if (finalBody && finalBody !== comment.body) {
-        onEdit(comment.id, finalBody)
+      // Copy existing attachments dropped from other sources
+      if (droppedExistingRef.current.size > 0) {
+        for (const [origId, attData] of droppedExistingRef.current.entries()) {
+          try {
+            const copied = await copyAttachment(
+              attData.storagePath,
+              user.id,
+              attData.fileName,
+              attData.fileType,
+              attData.fileSize ?? 0,
+              { commentId: comment.id },
+            )
+            finalBody = finalBody.split(`![](${origId})`).join(`![](${copied.id})`)
+            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join(`%[${attData.fileName}](${copied.id})`)
+            newAttachIds.add(copied.id)
+          } catch (err) {
+            toast.error(`Failed to copy ${attData.fileName}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+            finalBody = finalBody.split(`![](${origId})`).join('')
+            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join('')
+          }
+        }
+        finalBody = finalBody.trim() || comment.body
+        await queryClient.invalidateQueries({ queryKey: attachmentKeys.comment(comment.id) })
       }
 
-      // Upload staged files
+      // Strip inline refs to deleted attachments
+      const currentAttachIds = new Set((attachments ?? []).map((a) => a.id))
+      finalBody = finalBody.replace(/!\[\]\(([^)]+)\)/g, (match, id) => {
+        if (id.startsWith('temp-')) return match // shouldn't happen but guard
+        if (currentAttachIds.has(id)) return match
+        if (newAttachIds.has(id)) return match
+        if (droppedExistingRef.current.has(id)) return match
+        return '' // deleted attachment — strip
+      })
+      finalBody = finalBody.replace(/%\[[^\]]*\]\(([^)]+)\)/g, (match, id) => {
+        if (currentAttachIds.has(id)) return match
+        if (newAttachIds.has(id)) return match
+        if (droppedExistingRef.current.has(id)) return match
+        return ''
+      })
+      finalBody = finalBody.trim() || comment.body
+
+      if (finalBody && finalBody !== comment.body) {
+        await onEdit(comment.id, finalBody)
+      }
+
+      // Upload staged files (skip if already inlined)
+      const inlineFiles = new Set(inlineImagesRef.current.values())
       for (const file of stagedFiles) {
+        if (inlineFiles.has(file)) continue
         try {
           await uploadAttach.mutateAsync({
             file,
@@ -198,6 +265,7 @@ export function CommentItem({
       setSaving(false)
       setStagedFiles([])
       inlineImagesRef.current.clear()
+      droppedExistingRef.current.clear()
       setEditing(false)
     }
   }
@@ -217,18 +285,9 @@ export function CommentItem({
   const handleCancelEdit = () => {
     setStagedFiles([])
     inlineImagesRef.current.clear()
+    droppedExistingRef.current.clear()
     setEditing(false)
   }
-
-  // Collect inline-referenced attachment IDs for filtering from compact list
-  const inlineIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const s of segments) {
-      if (s.type === 'image') ids.add(s.attachmentId)
-      if (s.type === 'file_link') ids.add(s.attachmentId)
-    }
-    return ids
-  }, [segments])
 
   return (
     <div className="group flex gap-3 py-2">
@@ -262,7 +321,7 @@ export function CommentItem({
                 <Pencil className="h-3 w-3" />
               </button>
               <button
-                onClick={() => onDelete(comment.id)}
+                onClick={() => setDeleteConfirm(true)}
                 className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
               >
                 <Trash2 className="h-3 w-3" />
@@ -280,7 +339,7 @@ export function CommentItem({
               onKeyDown={handleKeyDown}
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
-              className="w-full min-h-[2.5rem] max-h-48 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring overflow-y-auto [&_img]:max-w-full [&_img]:rounded-lg"
+              className="w-full min-h-[2.5rem] rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset [&_img]:max-w-full [&_img]:rounded-lg"
             />
 
             {/* Existing attachments (reorderable) */}
@@ -329,7 +388,12 @@ export function CommentItem({
                 {stagedFiles.map((file, i) => (
                   <div
                     key={`${file.name}-${i}`}
-                    className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground"
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('application/staged-file-index', String(i))
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground cursor-grab"
                   >
                     <Paperclip className="h-3 w-3" />
                     <span className="max-w-[120px] truncate">{file.name}</span>
@@ -410,13 +474,13 @@ export function CommentItem({
           </div>
         )}
 
-        {/* Comment attachments (view mode) — only non-inline ones */}
+        {/* Comment attachments (view mode) */}
         {!editing && (() => {
-          const nonInline = (attachments ?? []).filter((a) => !inlineIds.has(a.id))
-          if (nonInline.length === 0) return null
+          const commentAttachments = attachments ?? []
+          if (commentAttachments.length === 0) return null
           return (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {nonInline.map((a) => (
+              {commentAttachments.map((a) => (
                 <AttachmentItem
                   key={a.id}
                   attachment={a}
@@ -434,6 +498,18 @@ export function CommentItem({
           )
         })()}
       </div>
+
+      <ConfirmDialog
+        open={deleteConfirm}
+        onClose={() => setDeleteConfirm(false)}
+        onConfirm={() => {
+          onDelete(comment.id)
+          setDeleteConfirm(false)
+        }}
+        title="Delete comment"
+        description="Delete this comment? This cannot be undone."
+        confirmLabel="Delete"
+      />
     </div>
   )
 }

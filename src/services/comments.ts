@@ -11,7 +11,7 @@ const COMMENT_PAGE_SIZE = 30
 export async function fetchComments(
   taskId: string,
   cursor?: string
-): Promise<{ data: CommentWithAuthor[]; hasMore: boolean }> {
+): Promise<{ data: CommentWithAuthor[]; hasMore: boolean; totalCount?: number }> {
   let query = supabase
     .from('comments')
     .select(COMMENT_SELECT)
@@ -33,7 +33,17 @@ export async function fetchComments(
   // Reverse so oldest is first within each page
   rows.reverse()
 
-  return { data: rows, hasMore }
+  // Total count on first page only
+  let totalCount: number | undefined
+  if (!cursor) {
+    const { count } = await supabase
+      .from('comments')
+      .select('*', { count: 'exact', head: true })
+      .eq('task_id', taskId)
+    totalCount = count ?? undefined
+  }
+
+  return { data: rows, hasMore, totalCount }
 }
 
 export async function createComment(

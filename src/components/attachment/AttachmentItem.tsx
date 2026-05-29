@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Download, Trash2, FileText, FileArchive, FileImage, File, GripVertical } from 'lucide-react'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { formatFileSize, isImageType, getFileExtension } from '@/lib/file-utils'
 import { getSignedUrl } from '@/services/attachments'
 import { formatDistanceToNow } from 'date-fns'
@@ -34,6 +35,7 @@ export function AttachmentItem({
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [loadingUrl, setLoadingUrl] = useState(false)
   const [lightbox, setLightbox] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
   const isImage = isImageType(attachment.file_type)
 
   const loadUrl = async () => {
@@ -75,6 +77,7 @@ export function AttachmentItem({
         id: attachment.id,
         fileName: attachment.file_name,
         fileType: attachment.file_type,
+        fileSize: attachment.file_size,
         storagePath: attachment.storage_path,
       })
     )
@@ -105,12 +108,23 @@ export function AttachmentItem({
         </button>
         {canDelete && (
           <button
-            onClick={() => onDelete(attachment.id, attachment.storage_path)}
+            onClick={() => setDeleteConfirm(true)}
             className="text-muted-foreground hover:text-destructive transition-colors"
           >
             <Trash2 className="h-3 w-3" />
           </button>
         )}
+        <ConfirmDialog
+          open={deleteConfirm}
+          onClose={() => setDeleteConfirm(false)}
+          onConfirm={() => {
+            onDelete(attachment.id, attachment.storage_path)
+            setDeleteConfirm(false)
+          }}
+          title="Delete attachment"
+          description={`Delete "${attachment.file_name}"? This cannot be undone.`}
+          confirmLabel="Delete"
+        />
       </div>
     )
   }
@@ -168,7 +182,7 @@ export function AttachmentItem({
           </button>
           {canDelete && (
             <button
-              onClick={() => onDelete(attachment.id, attachment.storage_path)}
+              onClick={() => setDeleteConfirm(true)}
               className="rounded p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             >
               <Trash2 className="h-4 w-4" />
@@ -176,6 +190,18 @@ export function AttachmentItem({
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteConfirm}
+        onClose={() => setDeleteConfirm(false)}
+        onConfirm={() => {
+          onDelete(attachment.id, attachment.storage_path)
+          setDeleteConfirm(false)
+        }}
+        title="Delete attachment"
+        description={`Delete "${attachment.file_name}"? This cannot be undone.`}
+        confirmLabel="Delete"
+      />
 
       {/* Lightbox */}
       {lightbox && imageUrl && (

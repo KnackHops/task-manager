@@ -6,7 +6,7 @@ const BUCKET = 'attachments'
 export async function uploadAttachment(
   file: File,
   uploadedBy: string,
-  target: { taskId: string } | { commentId: string }
+  target: { taskId: string } | { commentId: string } | 'orphan'
 ): Promise<AttachmentWithUploader> {
   const ext = file.name.split('.').pop() ?? ''
   const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -23,8 +23,8 @@ export async function uploadAttachment(
   const { data, error } = await supabase
     .from('attachments')
     .insert({
-      task_id: 'taskId' in target ? target.taskId : null,
-      comment_id: 'commentId' in target ? target.commentId : null,
+      task_id: target !== 'orphan' && 'taskId' in target ? target.taskId : null,
+      comment_id: target !== 'orphan' && 'commentId' in target ? target.commentId : null,
       uploaded_by: uploadedBy,
       file_name: file.name,
       file_type: file.type,
@@ -95,6 +95,67 @@ export async function reassignAttachmentsToComment(
     .update({ comment_id: commentId, task_id: null })
     .in('id', attachmentIds)
   if (error) throw error
+}
+
+/** Assign orphan attachments to a comment (no task_id to clear). */
+export async function assignAttachmentsToComment(
+  attachmentIds: string[],
+  commentId: string
+): Promise<void> {
+  if (attachmentIds.length === 0) return
+  const { error } = await supabase
+    .from('attachments')
+    .update({ comment_id: commentId })
+    .in('id', attachmentIds)
+  if (error) throw error
+}
+
+/** Copy an existing attachment to a new target (server-side storage copy, new DB record). */
+export async function copyAttachment(
+  sourceStoragePath: string,
+  uploadedBy: string,
+  fileName: string,
+  fileType: string,
+  fileSize: number,
+  target: { taskId: string } | { commentId: string } | 'orphan'
+): Promise<AttachmentWithUploader> {
+  const ext = fileName.split('.').pop() ?? ''
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const newPath = `${uploadedBy}/${uniqueId}${ext ? `.${ext}` : ''}`
+
+  // Server-side copy in storage
+  const { error: copyError } = await supabase.storage
+    .from(BUCKET)
+    .copy(sourceStoragePath, newPath)
+
+  if (copyError) throw copyError
+
+  // Insert new DB record
+  const { data, error } = await supabase
+    .from('attachments')
+    .insert({
+      task_id: target !== 'orphan' && 'taskId' in target ? target.taskId : null,
+      comment_id: target !== 'orphan' && 'commentId' in target ? target.commentId : null,
+      uploaded_by: uploadedBy,
+      file_name: fileName,
+      file_type: fileType,
+      file_size: fileSize,
+      storage_path: newPath,
+    })
+    .select(
+      `
+      *,
+      uploader:profiles!uploaded_by(id, full_name, avatar_url)
+    `
+    )
+    .single()
+
+  if (error) {
+    await supabase.storage.from(BUCKET).remove([newPath])
+    throw error
+  }
+
+  return data as AttachmentWithUploader
 }
 
 export async function reorderAttachments(

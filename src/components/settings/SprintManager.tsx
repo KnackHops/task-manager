@@ -57,7 +57,7 @@ function getDefaultDates(durationDays: number) {
 }
 
 export function SprintManager({ projectId }: SprintManagerProps) {
-  const { project } = useProjectContext()
+  const { project, isOwner } = useProjectContext()
   const queryClient = useQueryClient()
   const updateProject = useUpdateProject(project.slug)
   const isRefetching = useIsFetching({ queryKey: projectKeys.detail(project.slug) })
@@ -392,8 +392,8 @@ export function SprintManager({ projectId }: SprintManagerProps) {
         <select
           value={durationWeeks}
           onChange={(e) => handleDurationChange(Number(e.target.value), durationRemDays)}
-          disabled={isSaving}
-          className="bg-background border border-input rounded px-1.5 py-0.5 text-xs text-foreground outline-none disabled:opacity-50"
+          disabled={isSaving || !isOwner}
+          className="bg-background border border-input rounded px-1.5 py-0.5 text-xs text-foreground outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {[0, 1, 2, 3, 4].map((w) => (
             <option key={w} value={w}>
@@ -404,8 +404,8 @@ export function SprintManager({ projectId }: SprintManagerProps) {
         <select
           value={durationRemDays}
           onChange={(e) => handleDurationChange(durationWeeks, Number(e.target.value))}
-          disabled={isSaving}
-          className="bg-background border border-input rounded px-1.5 py-0.5 text-xs text-foreground outline-none disabled:opacity-50"
+          disabled={isSaving || !isOwner}
+          className="bg-background border border-input rounded px-1.5 py-0.5 text-xs text-foreground outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {[0, 1, 2, 3, 4, 5, 6].map((d) => (
             <option key={d} value={d}>

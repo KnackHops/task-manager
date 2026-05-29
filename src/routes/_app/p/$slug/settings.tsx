@@ -27,7 +27,7 @@ function ProjectSettingsPage() {
       </div>
 
       <div className="space-y-8 max-w-2xl">
-        {canManageColumns && <ProjectGeneralSettings />}
+        <ProjectGeneralSettings />
 
         {canManageColumns && (
           <ColumnManager

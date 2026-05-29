@@ -130,6 +130,15 @@ export function insertPastedImage(
     'max-w-full max-h-48 rounded-lg border border-border my-1 block'
   img.contentEditable = 'false'
 
+  // Put image on its own line if there's text before cursor
+  const container = range.startContainer
+  if (container.nodeType === Node.TEXT_NODE && range.startOffset > 0) {
+    const br = document.createElement('br')
+    range.insertNode(br)
+    range.setStartAfter(br)
+    range.setEndAfter(br)
+  }
+
   range.insertNode(img)
   range.collapse(false)
 
@@ -160,6 +169,15 @@ export function insertInlineImageAtCursor(
   img.className =
     'max-w-full max-h-48 rounded-lg border border-border my-1 block'
   img.contentEditable = 'false'
+
+  // Put image on its own line if there's text before cursor
+  const container = range.startContainer
+  if (container.nodeType === Node.TEXT_NODE && range.startOffset > 0) {
+    const br = document.createElement('br')
+    range.insertNode(br)
+    range.setStartAfter(br)
+    range.setEndAfter(br)
+  }
 
   range.insertNode(img)
   const space = document.createTextNode('\u00A0')
@@ -345,6 +363,7 @@ export interface AttachmentDropData {
   id: string
   fileName: string
   fileType: string
+  fileSize: number
   storagePath: string
 }
 
@@ -361,14 +380,36 @@ export function parseAttachmentDrop(
   }
 }
 
-/** Handle drop of an attachment onto an editor. Returns true if handled. */
+/** Place caret at the drop coordinates inside a contentEditable element. */
+export function placeCaretAtDropPoint(e: React.DragEvent): void {
+  const target = e.currentTarget as HTMLElement
+  target.focus()
+
+  let range: Range | null = null
+  if (document.caretRangeFromPoint) {
+    range = document.caretRangeFromPoint(e.clientX, e.clientY)
+  }
+
+  if (range) {
+    const sel = window.getSelection()
+    if (sel) {
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+  }
+}
+
+/** Handle drop of an attachment onto an editor. Returns the drop data if handled, null otherwise. */
 export async function handleAttachmentDrop(
   e: React.DragEvent,
   checkEmpty: () => void
-): Promise<boolean> {
+): Promise<AttachmentDropData | null> {
   const attData = parseAttachmentDrop(e)
-  if (!attData) return false
+  if (!attData) return null
   e.preventDefault()
+
+  // Focus editor and place cursor at drop coordinates
+  placeCaretAtDropPoint(e)
 
   if (isImageType(attData.fileType)) {
     const signedUrl = await getSignedUrl(attData.storagePath)
@@ -377,5 +418,5 @@ export async function handleAttachmentDrop(
     insertFileLinkAtCursor(attData.id, attData.fileName)
   }
   checkEmpty()
-  return true
+  return attData
 }

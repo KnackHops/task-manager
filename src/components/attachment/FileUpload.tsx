@@ -2,8 +2,11 @@ import { useState, useRef, useCallback } from 'react'
 import { Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
-import { useUploadAttachment } from '@/hooks/useAttachments'
+import { useUploadAttachment, attachmentKeys } from '@/hooks/useAttachments'
+import { useQueryClient } from '@tanstack/react-query'
 import { FILE_SIZE_LIMIT, formatFileSize } from '@/lib/file-utils'
+import { parseAttachmentDrop } from '@/lib/rich-editor'
+import { copyAttachment } from '@/services/attachments'
 
 interface FileUploadProps {
   taskId?: string
@@ -12,6 +15,7 @@ interface FileUploadProps {
 
 export function FileUpload({ taskId, commentId }: FileUploadProps) {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const upload = useUploadAttachment(taskId)
   const [dragOver, setDragOver] = useState(false)
   const [uploading, setUploading] = useState<string[]>([])
@@ -55,14 +59,49 @@ export function FileUpload({ taskId, commentId }: FileUploadProps) {
   )
 
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault()
       setDragOver(false)
+
+      // Check for existing attachment drag (application/attachment-json)
+      const attData = parseAttachmentDrop(e)
+      if (attData && user) {
+        const target = taskId
+          ? { taskId }
+          : commentId
+            ? { commentId }
+            : null
+        if (!target) return
+
+        setUploading((prev) => [...prev, attData.fileName])
+        try {
+          await copyAttachment(
+            attData.storagePath,
+            user.id,
+            attData.fileName,
+            attData.fileType,
+            attData.fileSize ?? 0,
+            target,
+          )
+          if (taskId) {
+            await queryClient.invalidateQueries({ queryKey: attachmentKeys.task(taskId) })
+          } else if (commentId) {
+            await queryClient.invalidateQueries({ queryKey: attachmentKeys.comment(commentId) })
+          }
+        } catch (err) {
+          toast.error(`Failed to copy ${attData.fileName}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+        } finally {
+          setUploading((prev) => prev.filter((n) => n !== attData.fileName))
+        }
+        return
+      }
+
+      // Native file drop
       if (e.dataTransfer.files.length > 0) {
         processFiles(e.dataTransfer.files)
       }
     },
-    [processFiles]
+    [processFiles, user, taskId, commentId, queryClient]
   )
 
   const handleFileChange = useCallback(

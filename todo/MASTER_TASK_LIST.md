@@ -575,6 +575,8 @@ search_tasks project=nonstop query="email template"   → search by text
 - [ ] Security audit
 - [x] MCP `read_attachment` tool — auto-download + extract zip attachments (prototypes), return file tree + contents to agent in one call. Eliminates manual download/extract/read workflow
 - [x] MCP Streamable HTTP transport — convert stdio → Streamable HTTP, deploy as service on Coolify, API key auth. Frontend UI for generating/managing API keys per user. Devs just add a URL to MCP config, no local build needed
+- [x] Settings permission gating — non-owner members see read-only general settings, disabled sprint duration picker. Prevents 406 RLS errors on `projects` UPDATE
+- [x] Inline attachment drag-drop improvements — bug fix (unfocused editor drop), Create Task rich editor, task description auto-edit on drag
 
 ---
 
@@ -920,6 +922,34 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ### 14.10.4 Build Verification
 - [x] `npm run build` — passes clean (tsc)
+
+---
+
+## PHASE 14.11: SETTINGS PERMISSIONS + INLINE ATTACHMENT DRAG-DROP ✅ COMPLETE
+
+> Settings read-only for non-owners. Inline attachment drag-drop: bug fix, Create Task rich editor, task description auto-edit on drag-over.
+
+### 14.11.1 Settings Permission Gating
+- [x] `ProjectGeneralSettings` — disable all inputs/selects for non-owners, hide Save, show "owner only" note
+- [x] `settings.tsx` — always render `ProjectGeneralSettings` (was gated by `canManageColumns`)
+- [x] `SprintManager` — disable default duration picker for non-owners
+
+### 14.11.2 Attachment Drop Bug Fix
+- [x] `rich-editor.ts` — `handleAttachmentDrop()` now focuses editor + places caret at drop coordinates via `caretRangeFromPoint` before inserting inline content
+- [x] New `placeCaretAtDropPoint()` utility — fixes drops on unfocused contentEditable (image was inserting at random page location)
+
+### 14.11.3 Task Description Auto-Edit on Drag
+- [x] `TaskDetailPanel.tsx` — read-only description div gets `onDragOver` + `onDragEnter` handlers
+- [x] Dragging attachment over description auto-enters edit mode (`startEditingDesc()`), editor then handles the drop
+
+### 14.11.4 Create Task Rich Editor
+- [x] `CreateTaskDialog.tsx` — replaced plain `<textarea>` with contentEditable div
+- [x] Supports drag-drop attachments (via `handleAttachmentDrop`), paste images (via `insertPastedImage`), backspace handling
+- [x] Submit flow: create task → upload inline images → update description with real attachment IDs
+- [x] Uses `useUpdateTask` + `useUploadAttachment` for post-create image upload
+
+### 14.11.5 Build Verification
+- [x] `npx tsc --noEmit` — passes clean
 
 ---
 
