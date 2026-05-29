@@ -73,8 +73,10 @@ function BoardPage() {
       } else if (activeSprintTasks !== undefined) {
         setSprintFilter('all')
       }
+    } else if (sprintFilter === undefined && sprints && !activeSprint) {
+      setSprintFilter('all')
     }
-  }, [activeSprint, sprintFilter, activeSprintTasks])
+  }, [activeSprint, sprintFilter, activeSprintTasks, sprints])
 
   // Derive the actual sprintId to pass to BoardContainer
   const boardSprintId =

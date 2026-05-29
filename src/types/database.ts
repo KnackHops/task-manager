@@ -2,7 +2,7 @@
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
 export type ProjectMemberRole = 'owner' | 'member'
 export type SprintStatus = 'planning' | 'active' | 'completed'
-export type NotificationType = 'comment' | 'mention' | 'assignment' | 'invite' | 'transfer' | 'leave' | 'kick'
+export type NotificationType = 'comment' | 'mention' | 'assignment' | 'invite' | 'transfer' | 'leave' | 'kick' | 'join'
 export type MemberStatus = 'pending' | 'active'
 
 // Legacy — kept on profiles table but no longer used for authorization

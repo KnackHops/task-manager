@@ -56,6 +56,7 @@ export function useAcceptInvite() {
       queryClient.invalidateQueries({ queryKey: inviteKeys.all })
       queryClient.invalidateQueries({ queryKey: notificationKeys.all })
       queryClient.invalidateQueries({ queryKey: projectKeys.all })
+      queryClient.invalidateQueries({ queryKey: ['members'] })
     },
   })
 }

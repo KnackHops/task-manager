@@ -6,7 +6,7 @@ import { resolveTaskId, formatTaskId } from '../helpers.js'
 export function registerAddComment(server: McpServer, ctx: RequestContext) {
   server.tool(
     'add_comment',
-    `Add a comment to a task. Use this to ask clarifying questions when task context is insufficient — prefer asking over guessing. The comment author is the authenticated MCP user.`,
+    `Add a comment to a task. Only use this when the user explicitly asks you to comment on a task, or when you need to ask a clarifying question because task context is insufficient. Never automatically post comments (e.g. status updates, progress notes) without being asked. The comment author is the authenticated MCP user.`,
     {
       task_id: z.string().describe('Task ID (e.g. "NT-1" or UUID)'),
       body: z.string().describe('Comment body text'),

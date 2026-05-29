@@ -120,12 +120,44 @@ export async function fetchPendingInvites(
 }
 
 export async function acceptInvite(memberId: string): Promise<void> {
+  // Fetch membership before updating (need project_id, user_id for notification)
+  const { data: membership } = await supabase
+    .from('project_members')
+    .select('project_id, user_id')
+    .eq('id', memberId)
+    .single()
+
   const { error } = await supabase
     .from('project_members')
     .update({ status: 'active' })
     .eq('id', memberId)
 
   if (error) throw error
+
+  // Notify project owner that member joined
+  if (membership) {
+    const [{ data: owner }, { data: project }, { data: joiner }] = await Promise.all([
+      supabase
+        .from('project_members')
+        .select('user_id')
+        .eq('project_id', membership.project_id)
+        .eq('role', 'owner')
+        .single(),
+      supabase.from('projects').select('name, slug').eq('id', membership.project_id).single(),
+      supabase.from('profiles').select('full_name').eq('id', membership.user_id).single(),
+    ])
+
+    if (owner && owner.user_id !== membership.user_id) {
+      await supabase.from('notifications').insert({
+        user_id: owner.user_id,
+        type: 'join',
+        task_id: null,
+        actor_id: membership.user_id,
+        message: `${joiner?.full_name ?? 'Someone'} accepted the invite and joined "${project?.name ?? 'a project'}"`,
+        project_slug: project?.slug ?? '',
+      })
+    }
+  }
 }
 
 export async function declineInvite(memberId: string): Promise<void> {
@@ -284,18 +316,32 @@ export async function transferOwnership(
 
   if (projectError) throw projectError
 
-  // Notify new owner
-  const [{ data: project }, { data: actor }] = await Promise.all([
+  // Notify both parties
+  const [{ data: project }, { data: oldOwnerProfile }, { data: newOwnerProfile }] = await Promise.all([
     supabase.from('projects').select('name, slug').eq('id', projectId).single(),
     supabase.from('profiles').select('full_name').eq('id', currentOwnerId).single(),
+    supabase.from('profiles').select('full_name').eq('id', newOwnerId).single(),
   ])
 
-  await supabase.from('notifications').insert({
-    user_id: newOwnerId,
-    type: 'transfer',
-    task_id: null,
-    actor_id: currentOwnerId,
-    message: `${actor?.full_name ?? 'Someone'} transferred ownership of "${project?.name ?? 'a project'}" to you`,
-    project_slug: project?.slug ?? '',
-  })
+  const projectName = project?.name ?? 'a project'
+  const projectSlug = project?.slug ?? ''
+
+  await supabase.from('notifications').insert([
+    {
+      user_id: newOwnerId,
+      type: 'transfer' as const,
+      task_id: null,
+      actor_id: currentOwnerId,
+      message: `${oldOwnerProfile?.full_name ?? 'Someone'} transferred ownership of "${projectName}" to you`,
+      project_slug: projectSlug,
+    },
+    {
+      user_id: currentOwnerId,
+      type: 'transfer' as const,
+      task_id: null,
+      actor_id: currentOwnerId,
+      message: `You transferred ownership of "${projectName}" to ${newOwnerProfile?.full_name ?? 'someone'}`,
+      project_slug: projectSlug,
+    },
+  ])
 }
