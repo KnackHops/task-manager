@@ -20,7 +20,7 @@ export function registerUpdateTask(server: McpServer, ctx: RequestContext) {
       column: z.string().optional().describe('Column slug to move task to'),
       priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('New priority'),
       tags: z.array(z.string()).optional().describe('Replace all tags with these tag slugs'),
-      assignees: z.array(z.string()).optional().describe('Replace all assignees with these emails'),
+      assignees: z.array(z.string()).optional().describe('Replace all assignees with these emails. IMPORTANT: You may remove yourself from assignees, but do not remove other assignees unless the user explicitly asks. When modifying assignees, always preserve existing assignees you are not asked to change.'),
       sprint: z.string().nullable().optional().describe('Sprint name, "active", or null to remove'),
       story_points: z.number().nullable().optional().describe('Story points (null to clear)'),
       route_path: z.string().nullable().optional().describe('URL or path (null to clear)'),

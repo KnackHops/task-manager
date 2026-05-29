@@ -2,7 +2,7 @@ import { Moon, Sun, Menu, LogOut } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { getTheme, toggleTheme } from '@/lib/theme'
 import { useAuth } from '@/contexts/AuthContext'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, Link } from '@tanstack/react-router'
 import { ProjectSwitcher } from '@/components/project/ProjectSwitcher'
 import { NotificationBell } from '@/components/notification/NotificationBell'
 
@@ -44,9 +44,9 @@ export function Header({ onMenuClick, projectSlug }: HeaderProps) {
 
       <div className="flex items-center gap-2">
         {profile && (
-          <span className="text-xs text-muted-foreground hidden sm:block">
+          <Link to="/settings" className="text-xs text-muted-foreground hidden sm:block hover:text-foreground transition-colors">
             {profile.full_name}
-          </span>
+          </Link>
         )}
         <NotificationBell />
         <button
