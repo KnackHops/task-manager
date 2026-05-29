@@ -9,7 +9,8 @@ export async function uploadAttachment(
   target: { taskId: string } | { commentId: string }
 ): Promise<AttachmentWithUploader> {
   const ext = file.name.split('.').pop() ?? ''
-  const storagePath = `${uploadedBy}/${crypto.randomUUID()}${ext ? `.${ext}` : ''}`
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const storagePath = `${uploadedBy}/${uniqueId}${ext ? `.${ext}` : ''}`
 
   // Upload to storage
   const { error: uploadError } = await supabase.storage

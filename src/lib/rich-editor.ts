@@ -120,7 +120,7 @@ export function insertPastedImage(
   const range = sel.getRangeAt(0)
   range.deleteContents()
 
-  const tempId = `temp-${crypto.randomUUID()}`
+  const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
   inlineImagesRef.set(tempId, file)
 
   const img = document.createElement('img')
