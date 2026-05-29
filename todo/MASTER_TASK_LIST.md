@@ -577,6 +577,7 @@ search_tasks project=nonstop query="email template"   → search by text
 - [x] MCP Streamable HTTP transport — convert stdio → Streamable HTTP, deploy as service on Coolify, API key auth. Frontend UI for generating/managing API keys per user. Devs just add a URL to MCP config, no local build needed
 - [x] Settings permission gating — non-owner members see read-only general settings, disabled sprint duration picker. Prevents 406 RLS errors on `projects` UPDATE
 - [x] Inline attachment drag-drop improvements — bug fix (unfocused editor drop), Create Task rich editor, task description auto-edit on drag
+- [x] Editor UX + dialog polish — global scrollbar, CreateTaskDialog sticky header/wider, ring-inset, editor max-height removal, auto-scroll new comments, attachment dedup fixes, draggable staged chips in edit comment
 
 ---
 
@@ -949,6 +950,54 @@ search_tasks project=nonstop query="email template"   → search by text
 - [x] Uses `useUpdateTask` + `useUploadAttachment` for post-create image upload
 
 ### 14.11.5 Build Verification
+- [x] `npx tsc --noEmit` — passes clean
+
+---
+
+## PHASE 14.12: EDITOR UX + DIALOG POLISH + BUG FIXES ✅ COMPLETE
+
+> Global scrollbar styling, dialog improvements, editor fixes, attachment dedup bugs, auto-scroll for new comments.
+
+### 14.12.1 Global Custom Scrollbar
+- [x] `src/index.css` — thin scrollbar styles in `@layer base` (`scrollbar-width: thin`, webkit pseudo-elements)
+
+### 14.12.2 CreateTaskDialog Improvements
+- [x] Header sticky to top (flex col + overflow-hidden parent, overflow-y-auto scrollable child)
+- [x] Widened to match TaskDetailPanel (`sm:max-w-3xl`)
+- [x] `ring-inset` on title, description, story points inputs (prevents focus ring clipping inside overflow-y-auto)
+- [x] AssigneeSelect dropdown opens upward (`position="top"`)
+- [x] Removed `display: flex` from description editor (was causing cursor to sit beside block images instead of below)
+
+### 14.12.3 AssigneeSelect Position Prop
+- [x] `src/components/ui/AssigneeSelect.tsx` — new `position?: 'top' | 'bottom'` prop (default `'bottom'`)
+- [x] Dropdown uses `bottom-full mb-1` when `position='top'`, `mt-1` when `'bottom'`
+
+### 14.12.4 Inline Image Line Break
+- [x] `src/lib/rich-editor.ts` — `insertPastedImage()` and `insertInlineImageAtCursor()` insert `<br>` before image when text exists before cursor (prevents image appearing on same line as text)
+
+### 14.12.5 CommentForm Editor Fixes
+- [x] Removed `max-h-48 overflow-y-auto` — editor grows freely with content
+- [x] Added `ring-inset` for consistent focus ring behavior
+
+### 14.12.6 CommentItem Editor Fixes
+- [x] Removed `max-h-48 overflow-y-auto` — editor grows freely with content
+- [x] Added `ring-inset` for consistent focus ring behavior
+- [x] Staged file chips now draggable into editor (added `draggable`, `onDragStart`, `cursor-grab`)
+- [x] `handleDrop` handles `application/staged-file-index` for staged chip drag-to-inline (matching CommentForm pattern)
+- [x] Added `placeCaretAtDropPoint` import for drop positioning
+
+### 14.12.7 Attachment Duplication Bug Fixes
+- [x] CommentForm — skip copying dragged attachments whose inline references were deleted before submit (`!finalBody.includes(origId)` guard)
+- [x] CreateTaskDialog — same guard for dragged attachment copies
+- [x] CommentItem — dedup guard for staged files already inlined (`inlineFiles.has(file)` check, matching CommentForm pattern)
+
+### 14.12.8 Auto-Scroll New Comment Form
+- [x] `src/components/task/TaskDetailPanel.tsx` — `ResizeObserver` on comment form container scrolls dialog wrapper to bottom when editor height changes
+- [x] Callback ref pattern (not `useEffect`) — handles late mount after loading skeleton
+- [x] Focus check: only scrolls when contenteditable is focused (no scroll during existing comment edits)
+- [x] `scrollWrapperRef` on scrollable wrapper div, `commentFormNodeRef` for Reply button imperative access
+
+### 14.12.9 Build Verification
 - [x] `npx tsc --noEmit` — passes clean
 
 ---
