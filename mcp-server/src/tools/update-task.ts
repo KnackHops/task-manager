@@ -12,7 +12,7 @@ import {
 export function registerUpdateTask(server: McpServer, ctx: RequestContext) {
   server.tool(
     'update_task',
-    'Update a task. Resolves column, tags, sprint by slug/name. Only provide fields you want to change.',
+    'Update a task. Resolves column, tags, sprint by slug/name. Only provide fields you want to change. IMPORTANT: Do not move a task to a different column automatically after completing work. Instead, ask the user if they would like to update the task column.',
     {
       task_id: z.string().describe('Task ID (e.g. "NT-1" or UUID)'),
       title: z.string().optional().describe('New title'),
