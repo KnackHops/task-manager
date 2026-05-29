@@ -16,7 +16,8 @@ export async function updateProfile(
 
 export async function uploadAvatar(userId: string, file: File): Promise<string> {
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-  const path = `${userId}/${crypto.randomUUID()}.${ext}`
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const path = `${userId}/${uniqueId}.${ext}`
 
   const { error: uploadError } = await supabase.storage
     .from(AVATAR_BUCKET)
