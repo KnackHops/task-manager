@@ -39,6 +39,7 @@ Copy `.env.example` to `.env.local` and fill in your Supabase credentials:
 ```
 VITE_SUPABASE_URL="your-supabase-kong-url"
 VITE_SUPABASE_ANON_KEY="your-supabase-anon-key"
+VITE_MCP_URL="your-mcp-server-url/mcp"
 ```
 
 Run database migrations from `supabase/migrations/` in order (001 through 022).
