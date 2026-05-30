@@ -15,6 +15,7 @@ import {
   createMentionSpan,
   handleEditorBackspace,
   insertPastedImage,
+  insertFileLinkAtCursor,
   handleAttachmentDrop,
   placeCaretAtDropPoint,
   type AttachmentDropData,
@@ -41,6 +42,8 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Map temp inline IDs → File for pasted images
   const inlineImagesRef = useRef<Map<string, File>>(new Map())
+  // Map temp inline IDs → File for non-image file links dragged into editor
+  const inlineFilesRef = useRef<Map<string, File>>(new Map())
   // Track existing attachments dropped into editor (original ID → drop data)
   const droppedExistingRef = useRef<Map<string, AttachmentDropData>>(new Map())
 
@@ -48,7 +51,8 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
     if (!editorRef.current) return
     const text = editorRef.current.textContent ?? ''
     const hasImages = editorRef.current.querySelector(`img[${INLINE_IMG_ATTR}]`) !== null
-    setIsEmpty(text.trim().length === 0 && !hasImages)
+    const hasFileLinks = editorRef.current.querySelector('span[data-file-link]') !== null
+    setIsEmpty(text.trim().length === 0 && !hasImages && !hasFileLinks)
   }, [])
 
   const detectMention = useCallback(() => {
@@ -160,8 +164,9 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
     if (!el || !user) return
     const rawBody = extractRawBody(el).trim()
     const hasInlineImages = inlineImagesRef.current.size > 0
+    const hasInlineFiles = inlineFilesRef.current.size > 0
     const hasDropped = droppedExistingRef.current.size > 0
-    if (!rawBody && stagedFiles.length === 0 && !hasInlineImages && !hasDropped) return
+    if (!rawBody && stagedFiles.length === 0 && !hasInlineImages && !hasInlineFiles && !hasDropped) return
 
     setSubmitting(true)
     try {
@@ -178,6 +183,21 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
           } catch (err) {
             toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
             finalBody = finalBody.replace(`![](${tempId})`, '')
+          }
+        }
+        finalBody = finalBody.trim() || '(attachment)'
+      }
+
+      // Step 1b: Upload inline file links as orphans
+      if (hasInlineFiles) {
+        for (const [tempId, file] of inlineFilesRef.current.entries()) {
+          try {
+            const attachment = await uploadAttachmentRaw(file, user.id, 'orphan')
+            finalBody = finalBody.split(`%[${file.name}](${tempId})`).join(`%[${file.name}](${attachment.id})`)
+            orphanIds.push(attachment.id)
+          } catch (err) {
+            toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+            finalBody = finalBody.split(`%[${file.name}](${tempId})`).join('')
           }
         }
         finalBody = finalBody.trim() || '(attachment)'
@@ -222,7 +242,7 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
       }
 
       // Step 5: Upload staged files directly to comment
-      const inlineFiles = new Set(inlineImagesRef.current.values())
+      const inlineFiles = new Set([...inlineImagesRef.current.values(), ...inlineFilesRef.current.values()])
       for (const file of stagedFiles) {
         if (inlineFiles.has(file)) continue
         try {
@@ -239,6 +259,7 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
       setIsEmpty(true)
       setStagedFiles([])
       inlineImagesRef.current.clear()
+      inlineFilesRef.current.clear()
       droppedExistingRef.current.clear()
       setMentionQuery(null)
     } catch (err) {
@@ -256,9 +277,15 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
         e.preventDefault()
         const index = parseInt(stagedIndex, 10)
         const file = stagedFiles[index]
-        if (!file || !isImageType(file.type)) return
+        if (!file) return
         placeCaretAtDropPoint(e)
-        insertPastedImage(file, inlineImagesRef.current)
+        if (isImageType(file.type)) {
+          insertPastedImage(file, inlineImagesRef.current)
+        } else {
+          const tempId = `file-${Date.now()}-${Math.random().toString(36).slice(2)}`
+          inlineFilesRef.current.set(tempId, file)
+          insertFileLinkAtCursor(tempId, file.name)
+        }
         checkEmpty()
         return
       }

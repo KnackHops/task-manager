@@ -11,6 +11,7 @@ import {
   extractRawBody,
   handleEditorBackspace,
   insertPastedImage,
+  insertFileLinkAtCursor,
   handleAttachmentDrop,
   placeCaretAtDropPoint,
   populateEditorFromBody,
@@ -67,6 +68,7 @@ export function CommentItem({
   const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inlineImagesRef = useRef<Map<string, File>>(new Map())
+  const inlineFilesRef = useRef<Map<string, File>>(new Map())
   const droppedExistingRef = useRef<Map<string, AttachmentDropData>>(new Map())
 
   const isEdited = comment.updated_at !== comment.created_at
@@ -92,6 +94,7 @@ export function CommentItem({
   const startEditing = useCallback(async () => {
     setEditing(true)
     inlineImagesRef.current.clear()
+    inlineFilesRef.current.clear()
     droppedExistingRef.current.clear()
     // Wait for DOM to render the contentEditable div
     requestAnimationFrame(async () => {
@@ -159,9 +162,15 @@ export function CommentItem({
         e.preventDefault()
         const index = parseInt(stagedIndex, 10)
         const file = stagedFiles[index]
-        if (!file || !isImageType(file.type)) return
+        if (!file) return
         placeCaretAtDropPoint(e)
-        insertPastedImage(file, inlineImagesRef.current)
+        if (isImageType(file.type)) {
+          insertPastedImage(file, inlineImagesRef.current)
+        } else {
+          const tempId = `file-${Date.now()}-${Math.random().toString(36).slice(2)}`
+          inlineFilesRef.current.set(tempId, file)
+          insertFileLinkAtCursor(tempId, file.name)
+        }
         return
       }
 
@@ -196,6 +205,25 @@ export function CommentItem({
           } catch (err) {
             toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
             finalBody = finalBody.replace(`![](${tempId})`, '')
+          }
+        }
+        finalBody = finalBody.trim() || comment.body
+      }
+
+      // Upload inline file links (non-images)
+      if (inlineFilesRef.current.size > 0) {
+        for (const [tempId, file] of inlineFilesRef.current.entries()) {
+          try {
+            const attachment = await uploadAttach.mutateAsync({
+              file,
+              uploadedBy: user.id,
+              target: { commentId: comment.id },
+            })
+            finalBody = finalBody.split(`%[${file.name}](${tempId})`).join(`%[${file.name}](${attachment.id})`)
+            newAttachIds.add(attachment.id)
+          } catch (err) {
+            toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+            finalBody = finalBody.split(`%[${file.name}](${tempId})`).join('')
           }
         }
         finalBody = finalBody.trim() || comment.body
@@ -248,7 +276,7 @@ export function CommentItem({
       }
 
       // Upload staged files (skip if already inlined)
-      const inlineFiles = new Set(inlineImagesRef.current.values())
+      const inlineFiles = new Set([...inlineImagesRef.current.values(), ...inlineFilesRef.current.values()])
       for (const file of stagedFiles) {
         if (inlineFiles.has(file)) continue
         try {
@@ -265,6 +293,7 @@ export function CommentItem({
       setSaving(false)
       setStagedFiles([])
       inlineImagesRef.current.clear()
+      inlineFilesRef.current.clear()
       droppedExistingRef.current.clear()
       setEditing(false)
     }
@@ -285,6 +314,7 @@ export function CommentItem({
   const handleCancelEdit = () => {
     setStagedFiles([])
     inlineImagesRef.current.clear()
+    inlineFilesRef.current.clear()
     droppedExistingRef.current.clear()
     setEditing(false)
   }
