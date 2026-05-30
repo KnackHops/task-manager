@@ -15,6 +15,12 @@ import { registerReadAttachment } from './tools/read-attachment.js'
 import { registerCreateTask } from './tools/create-task.js'
 import { registerUpdateTask } from './tools/update-task.js'
 import { registerAddComment } from './tools/add-comment.js'
+import {
+  registerReadTaskMemory,
+  registerWriteTaskMemory,
+  registerDeleteTaskMemory,
+  registerClearTaskMemory,
+} from './tools/task-memory.js'
 
 const PORT = parseInt(process.env.PORT || '3000', 10)
 
@@ -33,6 +39,10 @@ function createServer(ctx: RequestContext): McpServer {
   registerCreateTask(server, ctx)
   registerUpdateTask(server, ctx)
   registerAddComment(server, ctx)
+  registerReadTaskMemory(server, ctx)
+  registerWriteTaskMemory(server, ctx)
+  registerDeleteTaskMemory(server, ctx)
+  registerClearTaskMemory(server, ctx)
 
   return server
 }

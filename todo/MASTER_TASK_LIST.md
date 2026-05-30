@@ -1019,6 +1019,36 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
+## PHASE 14.13: MCP PER-TASK MEMORY ✅ COMPLETE (migration pending apply)
+
+> Persistent, per-task memory for Claude Code. Key-value facts scoped to a task, stored
+> server-side in Supabase so knowledge accumulates on the ticket across sessions and
+> machines. Shared across everyone working the ticket. Claude-only — no frontend surface.
+> Distinct from comments (human conversation). Cascade-deleted with the task.
+> Spec: `docs/superpowers/specs/2026-05-30-task-memory-design.md`
+
+### 14.13.1 Migration
+- [x] `supabase/migrations/022_task_memory.sql` — `task_memory` table (task_id FK ON DELETE CASCADE, key, value, type default 'fact', author_id FK → profiles, timestamps), `UNIQUE(task_id, key)` for upsert-by-key, index on task_id
+- [x] RLS (shared-per-task, mirrors comments): select `true`, insert checks `auth.uid() = author_id`, update/delete `true`
+- [x] `task_memory_updated_at` trigger (reuses `update_updated_at()`)
+- [ ] Apply migration to Supabase + redeploy MCP server
+
+### 14.13.2 MCP Tools — `mcp-server/src/tools/task-memory.ts`
+- [x] `read_task_memory` — all facts for a task, grouped by type (call at start of work)
+- [x] `write_task_memory` — upsert one fact by `(task_id, key)`, type default 'fact', stamps author_id
+- [x] `delete_task_memory` — remove one stale fact by key
+- [x] `clear_task_memory` — wipe all facts for a task (fresh-context reset, explicit-ask only)
+- [x] Tool descriptions guide Claude: read before investigating, store only durable facts, never secrets
+
+### 14.13.3 Integration
+- [x] `src/index.ts` — register all 4 memory tools
+- [x] `get-task.ts` — `**Memory:** N facts` summary line + hint to call `read_task_memory` when > 0
+
+### 14.13.4 Build Verification
+- [x] `npm run build` (mcp-server) — passes clean (tsc, 0 errors)
+
+---
+
 ## FILE STRUCTURE (Current)
 
 ```
@@ -1120,7 +1150,8 @@ task-manager/
 │       ├── 016_member_notification_types.sql
 │       ├── 017_notifications_insert_policy.sql
 │       ├── 018_api_keys.sql
-│       └── 019_avatars_bucket.sql
+│       ├── 019_avatars_bucket.sql
+│       └── 022_task_memory.sql    # per-task MCP memory (key-value facts)
 ├── .env.example
 ├── .env.local
 ├── vite.config.ts
@@ -1135,7 +1166,7 @@ task-manager/
 │       ├── auth.ts          # API key auth, magic link sessions, 55min cache
 │       ├── supabase.ts      # Admin + anon Supabase clients
 │       ├── helpers.ts       # Task ID parsing, slug resolution
-│       └── tools/           # One file per MCP tool (list-projects, list-tasks, get-task, search-tasks, get-attachment-url, read-attachment, create-task, update-task, add-comment)
+│       └── tools/           # One file per MCP tool (list-projects, list-tasks, get-task, search-tasks, get-attachment-url, read-attachment, create-task, update-task, add-comment) + task-memory.ts (read/write/delete/clear memory)
 └── todo/
     └── MASTER_TASK_LIST.md
 ```
@@ -1157,6 +1188,7 @@ task-manager/
 | `notifications` | Per-user notifications (comment, mention, assignment, invite, transfer, leave, kick) |
 | `sprints` | Sprint management (name, project_id, start_date, end_date, status, goal, story_points_target) |
 | `comments` | Task comments (with @mention support) |
+| `task_memory` | Per-task persistent memory for MCP/Claude (key-value facts, shared per task, cascade-deleted) |
 | `attachments` | File attachments |
 | `activity_log` | Task activity history |
 

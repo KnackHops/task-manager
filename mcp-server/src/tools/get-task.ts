@@ -27,6 +27,7 @@ export function registerGetTask(server: McpServer, ctx: RequestContext) {
             creator:profiles!created_by(id, full_name, email),
             project:projects!project_id(id, name, slug, prefix),
             comments(count),
+            task_memory(count),
             attachments(id, file_name, file_type, file_size)
           `)
           .eq('id', taskUUID)
@@ -80,8 +81,10 @@ export function registerGetTask(server: McpServer, ctx: RequestContext) {
         lines.push(`**Updated:** ${t.updated_at}`)
 
         const commentCount = t.comments?.[0]?.count ?? 0
+        const memoryCount = t.task_memory?.[0]?.count ?? 0
         const attachments = (t.attachments ?? []) as any[]
-        lines.push(`**Comments:** ${commentCount} | **Attachments:** ${attachments.length}`)
+        lines.push(`**Comments:** ${commentCount} | **Attachments:** ${attachments.length} | **Memory:** ${memoryCount} facts`)
+        if (memoryCount > 0) lines.push('_Call read_task_memory to load what Claude already knows about this task._')
 
         // Description
         lines.push('')
