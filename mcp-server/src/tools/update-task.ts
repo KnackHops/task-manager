@@ -54,6 +54,13 @@ export function registerUpdateTask(server: McpServer, ctx: RequestContext) {
         if (args.column !== undefined) {
           const col = await resolveColumn(ctx.supabase, projectId, args.column)
           update.column_id = col.id
+          if (col.is_done) {
+            update.is_done = true
+            update.done_at = new Date().toISOString()
+          } else {
+            update.is_done = false
+            update.done_at = null
+          }
         }
 
         if (args.sprint !== undefined) {

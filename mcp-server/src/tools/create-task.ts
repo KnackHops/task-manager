@@ -31,18 +31,29 @@ export function registerCreateTask(server: McpServer, ctx: RequestContext) {
 
         // Resolve column
         let columnId = project.default_column_id
+        let columnIsDone = false
         if (args.column) {
           const col = await resolveColumn(ctx.supabase, project.id, args.column)
           columnId = col.id
+          columnIsDone = col.is_done
+        } else if (columnId) {
+          // Check if default column is a done column
+          const { data: defCol } = await ctx.supabase
+            .from('project_columns')
+            .select('is_done')
+            .eq('id', columnId)
+            .single()
+          columnIsDone = defCol?.is_done ?? false
         }
         if (!columnId) {
           const { data: cols } = await ctx.supabase
             .from('project_columns')
-            .select('id')
+            .select('id, is_done')
             .eq('project_id', project.id)
             .order('position')
             .limit(1)
           columnId = cols?.[0]?.id
+          columnIsDone = cols?.[0]?.is_done ?? false
         }
         if (!columnId) {
           return { content: [{ type: 'text' as const, text: 'Error: No columns in project' }], isError: true }
@@ -77,6 +88,8 @@ export function registerCreateTask(server: McpServer, ctx: RequestContext) {
             story_points: args.story_points ?? null,
             route_path: args.route_path ?? null,
             position: count ?? 0,
+            is_done: columnIsDone,
+            done_at: columnIsDone ? new Date().toISOString() : null,
           })
           .select('id, task_number')
           .single()
