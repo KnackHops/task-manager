@@ -73,6 +73,8 @@ export function CreateTaskDialog({
   const [priority, setPriority] = useState<TaskPriority>('medium')
   const [sprintId, setSprintId] = useState<string>(defaultSprintId ?? activeSprint?.id ?? '')
   const [storyPoints, setStoryPoints] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [dueDate, setDueDate] = useState('')
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [descEmpty, setDescEmpty] = useState(true)
@@ -185,6 +187,8 @@ export function CreateTaskDialog({
         priority,
         sprint_id: sprintId || null,
         story_points: storyPoints ? Number(storyPoints) : null,
+        start_date: startDate || null,
+        due_date: dueDate || null,
         tag_ids: selectedTagIds.length > 0 ? selectedTagIds : undefined,
         assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
       })
@@ -453,6 +457,35 @@ export function CreateTaskDialog({
               onChange={(e) => setStoryPoints(e.target.value)}
               placeholder="—"
               className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <label htmlFor="start-date" className="text-sm font-medium text-foreground">
+              Start Date
+            </label>
+            <input
+              id="start-date"
+              type="date"
+              value={startDate}
+              max={dueDate || undefined}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [color-scheme:dark]"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="due-date" className="text-sm font-medium text-foreground">
+              Due Date
+            </label>
+            <input
+              id="due-date"
+              type="date"
+              value={dueDate}
+              min={startDate || undefined}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [color-scheme:dark]"
             />
           </div>
         </div>

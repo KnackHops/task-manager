@@ -1049,6 +1049,66 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
+## PHASE 14.14: BOARD LIST VIEW + CARD/PANEL POLISH ✅ COMPLETE
+
+> Added a list view alternative to the kanban board, plus a pass of UI polish across
+> cards, the task panel, comments, and name display.
+> Spec: `docs/superpowers/specs/2026-05-30-board-list-view-design.md`
+
+### 14.14.1 Shared DnD hook
+- [x] `src/hooks/useBoardDnd.ts` — extracted column grouping + `handleDragEnd` (optimistic reorder, sprint auto-assign, done auto-mark) from `BoardContainer`
+- [x] `BoardContainer.tsx` refactored to consume the hook (no behavior change)
+
+### 14.14.2 List view (toggle on board page)
+- [x] `BoardListView.tsx` — collapsible column groups (per-column collapse persisted in `localStorage['boardListCollapsed:<projectId>']`), `Droppable` per column
+- [x] `TaskListRow.tsx` — drag row between groups; click row opens detail; hover-pencil to rename; inline quick-edit (priority, title, done checkbox, column) via optimistic `useUpdateTask`; all edits gated behind `canEditTask`
+- [x] `index.tsx` — `LayoutGrid | List` view toggle in board header, `viewMode` persisted in `localStorage['boardViewMode']`, body swaps board ↔ list
+- [x] Aligned row columns: title (flex-1) · tags (w-150) · activity counts+points (w-92) · assignees (w-58) · priority (w-88) · column (w-104)
+
+### 14.14.3 Task number pill
+- [x] `src/components/ui/TaskNumberPill.tsx` — bold pill, click-to-copy (toast), stops propagation. Used in `TaskCard`, `TaskListRow`, and `TaskDetailPanel` header
+
+### 14.14.4 Board card redesign
+- [x] `TaskCard.tsx` — compact layout: pill + tags + points top strip, title, single meta row (counts/sprint left, assignees right)
+
+### 14.14.5 Task detail panel
+- [x] Action buttons (Mark as Done / Archive / Delete) moved from collapsed Details into the header row, right-aligned before the close button
+
+### 14.14.6 Comments containment
+- [x] `CommentList.tsx` — collapsed by default to newest 4 comments; "View all N comments" expands and reveals existing load-previous paging (no nested scroll)
+
+### 14.14.7 Capitalized names
+- [x] `capitalize` applied to name displays: comment authors, assignee select (chips + dropdown), created-by, header profile, @mention dropdown, member manager (display-only, data untouched)
+
+### 14.14.8 Build Verification
+- [x] `npm run build` — passes clean (tsc + vite)
+
+---
+
+## PHASE 14.15: GANTT CHART ✅ COMPLETE (migration pending apply)
+
+> Timeline view of dated tasks, grouped by column, with drag-to-schedule editing.
+> Spec: `docs/superpowers/specs/2026-05-31-gantt-chart-design.md`
+
+### 14.15.1 Task dates
+- [x] `supabase/migrations/023_task_dates.sql` — nullable `start_date` + `due_date` on `tasks`
+- [ ] Apply migration to Supabase
+- [x] Types: `start_date`/`due_date` added to `Task`, `UpdateTaskInput`, `CreateTaskInput` (`TASK_SELECT` uses `*`, so reads include them)
+- [x] Date inputs in `TaskDetailPanel` Details grid and `CreateTaskDialog` (start ≤ due via min/max)
+
+### 14.15.2 Gantt view
+- [x] Route `src/routes/_app/p/$slug/gantt.tsx` (opens `TaskDetailPanel` via `?task=`)
+- [x] Sidebar "Gantt" link (CalendarRange) between Sprints and Archive
+- [x] `src/components/gantt/GanttView.tsx` — Day/Week scale toggle (default week), timeline range auto-computed + padded, rows grouped by column (collapsible, persisted `localStorage['ganttCollapsed:<projectId>']`), Today marker, Unscheduled panel for tasks missing a date
+- [x] `src/components/gantt/GanttBar.tsx` — bar positioned by start/due; drag body to move both dates, drag edges to resize one end; optimistic `useUpdateTask`; `due ≥ start` clamp; gated behind `canEditTask`
+- [x] Bar rule: only tasks with BOTH dates render; others go to Unscheduled
+- [x] No dependencies/arrows in v1 (YAGNI)
+
+### 14.15.3 Build Verification
+- [x] `npm run build` — passes clean (tsc + vite)
+
+---
+
 ## FILE STRUCTURE (Current)
 
 ```
@@ -1151,7 +1211,8 @@ task-manager/
 │       ├── 017_notifications_insert_policy.sql
 │       ├── 018_api_keys.sql
 │       ├── 019_avatars_bucket.sql
-│       └── 022_task_memory.sql    # per-task MCP memory (key-value facts)
+│       ├── 022_task_memory.sql    # per-task MCP memory (key-value facts)
+│       └── 023_task_dates.sql     # task start_date + due_date (Gantt)
 ├── .env.example
 ├── .env.local
 ├── vite.config.ts
@@ -1182,7 +1243,7 @@ task-manager/
 | `project_columns` | Custom columns per project (name, slug, position, is_done) |
 | `project_members` | Membership + granular permissions (7 permission flags), invite status (pending/active), invited_by |
 | `project_tags` | Custom tags per project (name, slug, color) |
-| `tasks` | Tasks (task_number, column_id, sprint_id, priority, story_points, is_done, done_at, archived, position) |
+| `tasks` | Tasks (task_number, column_id, sprint_id, priority, story_points, is_done, done_at, archived, position, start_date, due_date) |
 | `task_tags` | Many-to-many join (task ↔ tag) |
 | `task_assignees` | Many-to-many join (task ↔ profiles) |
 | `notifications` | Per-user notifications (comment, mention, assignment, invite, transfer, leave, kick) |

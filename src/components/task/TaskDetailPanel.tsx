@@ -698,6 +698,36 @@ export function TaskDetailPanel({
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <label htmlFor="detail-start-date" className="text-sm font-medium text-foreground">
+                    Start Date
+                  </label>
+                  <input
+                    id="detail-start-date"
+                    type="date"
+                    disabled={!canEditTask}
+                    value={task.start_date ?? ''}
+                    max={task.due_date ?? undefined}
+                    onChange={(e) => handleFieldUpdate('start_date', e.target.value || null)}
+                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 [color-scheme:dark]"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="detail-due-date" className="text-sm font-medium text-foreground">
+                    Due Date
+                  </label>
+                  <input
+                    id="detail-due-date"
+                    type="date"
+                    disabled={!canEditTask}
+                    value={task.due_date ?? ''}
+                    min={task.start_date ?? undefined}
+                    onChange={(e) => handleFieldUpdate('due_date', e.target.value || null)}
+                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 [color-scheme:dark]"
+                  />
+                </div>
+
                 <AssigneeSelect
                   members={members ?? []}
                   selectedIds={currentAssigneeIds}

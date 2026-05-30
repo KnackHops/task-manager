@@ -115,6 +115,8 @@ export interface Task {
   story_points: number | null
   route_path: string | null
   route_label: string | null
+  start_date: string | null
+  due_date: string | null
   created_at: string
   updated_at: string
 }
@@ -188,6 +190,8 @@ export interface CreateTaskInput {
   story_points?: number | null
   route_path?: string | null
   route_label?: string | null
+  start_date?: string | null
+  due_date?: string | null
   tag_ids?: string[]
   assignee_ids?: string[]
 }
@@ -206,6 +210,8 @@ export interface UpdateTaskInput {
   archived_at?: string | null
   is_done?: boolean
   done_at?: string | null
+  start_date?: string | null
+  due_date?: string | null
 }
 
 export interface CreateProjectInput {
