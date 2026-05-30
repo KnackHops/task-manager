@@ -418,30 +418,100 @@ export function TaskDetailPanel({
   return (
     <Dialog open onClose={onClose} className="max-w-[calc(100vw-2rem)] sm:max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
       <DialogHeader>
-        <div className="flex items-center gap-2 pr-8">
-          {project.prefix && (
-            <span className="text-sm font-medium text-primary font-mono shrink-0">
-              {project.prefix}-{task.task_number}
-            </span>
-          )}
-          {isEditingTitle ? (
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={handleTitleBlur}
-              onKeyDown={(e) => e.key === 'Enter' && handleTitleBlur()}
-              autoFocus
-              className="flex-1 bg-transparent text-lg font-semibold text-foreground outline-none border-b border-primary"
-            />
-          ) : (
-            <DialogTitle>
-              <span
-                onClick={() => canEditTask && setIsEditingTitle(true)}
-                className={canEditTask ? 'hover:text-primary transition-colors cursor-pointer' : ''}
-              >
-                {task.title}
+        <div className="flex items-center justify-between gap-3 pr-10">
+          <div className="flex min-w-0 items-center gap-2">
+            {project.prefix && (
+              <span className="text-sm font-medium text-primary font-mono shrink-0">
+                {project.prefix}-{task.task_number}
               </span>
-            </DialogTitle>
+            )}
+            {isEditingTitle ? (
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={handleTitleBlur}
+                onKeyDown={(e) => e.key === 'Enter' && handleTitleBlur()}
+                autoFocus
+                className="flex-1 bg-transparent text-lg font-semibold text-foreground outline-none border-b border-primary"
+              />
+            ) : (
+              <DialogTitle>
+                <span
+                  onClick={() => canEditTask && setIsEditingTitle(true)}
+                  className={`block truncate ${canEditTask ? 'hover:text-primary transition-colors cursor-pointer' : ''}`}
+                >
+                  {task.title}
+                </span>
+              </DialogTitle>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          {(canEditTask || canArchiveTask || canDeleteTask) && (
+            <div className="flex shrink-0 items-center gap-1.5">
+              {canEditTask && (() => {
+                const inDoneColumn = doneColumnIds.includes(task.column_id)
+                const canToggle = !inDoneColumn || !task.is_done
+                return (
+                  <button
+                    onClick={() => {
+                      if (!canToggle) return
+                      updateTask.mutate(
+                        {
+                          taskId,
+                          input: {
+                            is_done: !task.is_done,
+                            done_at: !task.is_done ? new Date().toISOString() : null,
+                          },
+                        },
+                        { onError: (err) => toast.error(err.message) }
+                      )
+                    }}
+                    disabled={!canToggle}
+                    title={!canToggle ? 'Move task out of done column to toggle' : task.is_done ? 'Completed' : 'Mark as Done'}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                      task.is_done
+                        ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20'
+                        : 'border-border text-muted-foreground hover:bg-muted'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{task.is_done ? 'Completed' : 'Mark as Done'}</span>
+                  </button>
+                )
+              })()}
+
+              {canArchiveTask && (
+                <button
+                  onClick={task.archived ? handleUnarchive : handleArchive}
+                  title={task.archived ? 'Unarchive' : 'Archive'}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  {task.archived ? (
+                    <>
+                      <ArchiveRestore className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Unarchive</span>
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Archive</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {canDeleteTask && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  title="Delete Task"
+                  className="flex items-center gap-1.5 rounded-lg border border-destructive/30 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Delete</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
       </DialogHeader>
@@ -642,70 +712,6 @@ export function TaskDetailPanel({
                   onChange={handleTagsChange}
                   label="Tags"
                 />
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex flex-wrap gap-2">
-                {canEditTask && (() => {
-                  const inDoneColumn = doneColumnIds.includes(task.column_id)
-                  const canToggle = !inDoneColumn || !task.is_done
-                  return (
-                    <button
-                      onClick={() => {
-                        if (!canToggle) return
-                        updateTask.mutate(
-                          {
-                            taskId,
-                            input: {
-                              is_done: !task.is_done,
-                              done_at: !task.is_done ? new Date().toISOString() : null,
-                            },
-                          },
-                          { onError: (err) => toast.error(err.message) }
-                        )
-                      }}
-                      disabled={!canToggle}
-                      title={!canToggle ? 'Move task out of done column to toggle' : undefined}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                        task.is_done
-                          ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20'
-                          : 'border-border text-muted-foreground hover:bg-muted'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      <CheckCircle className="h-3.5 w-3.5" />
-                      {task.is_done ? 'Completed' : 'Mark as Done'}
-                    </button>
-                  )
-                })()}
-
-                {canArchiveTask && (
-                  <button
-                    onClick={task.archived ? handleUnarchive : handleArchive}
-                    className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
-                  >
-                    {task.archived ? (
-                      <>
-                        <ArchiveRestore className="h-3.5 w-3.5" />
-                        Unarchive
-                      </>
-                    ) : (
-                      <>
-                        <Archive className="h-3.5 w-3.5" />
-                        Archive
-                      </>
-                    )}
-                  </button>
-                )}
-
-                {canDeleteTask && (
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="flex items-center gap-2 rounded-lg border border-destructive/30 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete Task
-                  </button>
-                )}
               </div>
             </div>
           )}

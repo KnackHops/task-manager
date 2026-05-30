@@ -1,4 +1,4 @@
-import { useMemo, forwardRef } from 'react'
+import { useMemo, useState, forwardRef } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -41,6 +41,14 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
     const loadedCount = comments.length
     const remaining = totalCount != null ? totalCount - loadedCount : undefined
 
+    // Collapsed by default: show only the newest few comments. "View all" reveals
+    // the full loaded thread (and the existing load-previous paging for older ones).
+    const VISIBLE = 4
+    const [expanded, setExpanded] = useState(false)
+    const knownCount = totalCount ?? loadedCount
+    const isTruncated = !expanded && knownCount > VISIBLE
+    const visibleComments = isTruncated ? comments.slice(-VISIBLE) : comments
+
     const handleEdit = async (commentId: string, body: string) => {
       try {
         await updateComment.mutateAsync({ commentId, body })
@@ -66,7 +74,17 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
     return (
       <div>
         <div className="divide-y divide-border">
-          {hasNextPage && (
+          {isTruncated && (
+            <div className="flex justify-center py-2">
+              <button
+                onClick={() => setExpanded(true)}
+                className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                View all {knownCount} comments
+              </button>
+            </div>
+          )}
+          {expanded && hasNextPage && (
             <div className="flex justify-center py-2">
               <button
                 onClick={() => fetchNextPage()}
@@ -84,7 +102,7 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
             </div>
           )}
           {comments.length > 0 ? (
-            comments.map((comment) => (
+            visibleComments.map((comment) => (
               <CommentItem
                 key={comment.id}
                 comment={comment}

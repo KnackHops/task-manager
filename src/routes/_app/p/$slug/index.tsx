@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
-import { Plus, Star, Play, CheckCircle2, ListPlus, Loader2 } from 'lucide-react'
+import { Plus, Star, Play, CheckCircle2, ListPlus, Loader2, LayoutGrid, List } from 'lucide-react'
 import { useIsFetching } from '@tanstack/react-query'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -10,6 +10,8 @@ import { useToggleFavorite } from '@/hooks/useMembers'
 import { useSprints, useCompleteSprint, sprintKeys } from '@/hooks/useSprints'
 import { useTasks } from '@/hooks/useTasks'
 import { BoardContainer } from '@/components/board/BoardContainer'
+import { BoardListView } from '@/components/board/BoardListView'
+import { cn } from '@/lib/utils'
 import { SprintFilterDropdown, type SprintFilterDropdownHandle } from '@/components/board/SprintFilterDropdown'
 import { SprintTaskSelectionPanel } from '@/components/board/SprintTaskSelectionPanel'
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog'
@@ -41,6 +43,19 @@ function BoardPage() {
   const { task: taskFromUrl, sprint: sprintFromUrl } = Route.useSearch()
   const sprintDropdownRef = useRef<SprintFilterDropdownHandle>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'board' | 'list'>(() => {
+    const saved = localStorage.getItem('boardViewMode')
+    return saved === 'list' ? 'list' : 'board'
+  })
+
+  const setView = (mode: 'board' | 'list') => {
+    setViewMode(mode)
+    try {
+      localStorage.setItem('boardViewMode', mode)
+    } catch {
+      // ignore persistence failures
+    }
+  }
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [selectionPanelSprint, setSelectionPanelSprint] = useState<Sprint | null>(null)
   const [completeDialogSprint, setCompleteDialogSprint] = useState<Sprint | null>(null)
@@ -203,6 +218,32 @@ function BoardPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-lg border border-input p-0.5">
+            <button
+              onClick={() => setView('board')}
+              title="Board view"
+              className={cn(
+                'flex items-center justify-center rounded-md p-1.5 transition-colors',
+                viewMode === 'board'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setView('list')}
+              title="List view"
+              className={cn(
+                'flex items-center justify-center rounded-md p-1.5 transition-colors',
+                viewMode === 'list'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
           {currentSprint && canManageSprints ? (
             <>
               {currentSprint.status === 'planning' && (
@@ -268,11 +309,19 @@ function BoardPage() {
       </div>
 
       <div className="flex-1 min-h-0">
-        <BoardContainer
-          projectId={project.id}
-          sprintId={boardSprintId}
-          onTaskClick={(taskId) => setSelectedTaskId(taskId)}
-        />
+        {viewMode === 'board' ? (
+          <BoardContainer
+            projectId={project.id}
+            sprintId={boardSprintId}
+            onTaskClick={(taskId) => setSelectedTaskId(taskId)}
+          />
+        ) : (
+          <BoardListView
+            projectId={project.id}
+            sprintId={boardSprintId}
+            onTaskClick={(taskId) => setSelectedTaskId(taskId)}
+          />
+        )}
       </div>
 
       {createOpen && user && (
