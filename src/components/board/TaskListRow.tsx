@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Draggable } from '@hello-pangea/dnd'
-import { GripVertical, Pencil } from 'lucide-react'
+import { GripVertical, Pencil, MessageSquare, Paperclip, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { PriorityBadge } from '@/components/ui/Badge'
+import { PriorityBadge, TagBadge } from '@/components/ui/Badge'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
+import { Avatar } from '@/components/ui/Avatar'
 import { useUpdateTask } from '@/hooks/useTasks'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import type { TaskWithRelations } from '@/types/database'
@@ -134,10 +135,10 @@ export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
               className="min-w-0 flex-1 rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
           ) : (
-            <>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <span
                 className={cn(
-                  'min-w-0 flex-1 truncate text-card-foreground',
+                  'min-w-0 truncate text-card-foreground',
                   task.is_done && 'text-muted-foreground line-through'
                 )}
               >
@@ -152,24 +153,80 @@ export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
               )}
-            </>
+            </div>
           )}
+
+          {/* Tags (fixed slot, aligned column) */}
+          <div className="hidden w-[150px] shrink-0 items-center gap-1 overflow-hidden md:flex">
+            {task.tags?.slice(0, 2).map((tag) => (
+              <TagBadge key={tag.id} name={tag.name} color={tag.color} />
+            ))}
+            {task.tags && task.tags.length > 2 && (
+              <span className="text-[10px] text-muted-foreground">
+                +{task.tags.length - 2}
+              </span>
+            )}
+          </div>
+
+          {/* Activity column: counts · points · assignees (right-aligned, fixed slot) */}
+          <div className="hidden w-[92px] shrink-0 items-center justify-end gap-2 sm:flex">
+            {(task.comment_count ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                <MessageSquare className="h-3 w-3" />
+                {task.comment_count}
+              </span>
+            )}
+            {(task.attachment_count ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                <Paperclip className="h-3 w-3" />
+                {task.attachment_count}
+              </span>
+            )}
+            {task.story_points != null && (
+              <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary">
+                <Zap className="h-3 w-3" />
+                {task.story_points}
+              </span>
+            )}
+          </div>
+
+          {/* Assignees (fixed slot) */}
+          <div className="hidden w-[58px] shrink-0 justify-end sm:flex">
+            {task.assignees && task.assignees.length > 0 && (
+              <div className="flex -space-x-1.5">
+                {task.assignees.slice(0, 2).map((a) => (
+                  <Avatar
+                    key={a.id}
+                    name={a.full_name}
+                    url={a.avatar_url}
+                    size="sm"
+                    className="ring-2 ring-card"
+                  />
+                ))}
+                {task.assignees.length > 2 && (
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground ring-2 ring-card">
+                    +{task.assignees.length - 2}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {canEditTask ? (
             <select
               value={task.priority}
               onClick={stop}
               onChange={(e) => changePriority(e.target.value as Priority)}
-              className="shrink-0 cursor-pointer rounded bg-transparent text-xs text-muted-foreground focus:outline-none"
+              className="w-[88px] shrink-0 cursor-pointer rounded bg-transparent text-xs capitalize text-muted-foreground focus:outline-none"
             >
               {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
+                <option key={p} value={p} className="capitalize">
                   {p}
                 </option>
               ))}
             </select>
           ) : (
-            <PriorityBadge priority={task.priority} className="shrink-0" />
+            <PriorityBadge priority={task.priority} className="w-[88px] shrink-0 justify-center capitalize" />
           )}
 
           {canEditTask ? (
@@ -177,7 +234,7 @@ export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
               value={task.column_id}
               onClick={stop}
               onChange={(e) => changeColumn(e.target.value)}
-              className="max-w-[120px] shrink-0 cursor-pointer rounded bg-transparent text-xs text-muted-foreground focus:outline-none"
+              className="w-[104px] shrink-0 cursor-pointer rounded bg-transparent text-xs text-muted-foreground focus:outline-none"
             >
               {columns.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -186,7 +243,7 @@ export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
               ))}
             </select>
           ) : (
-            <span className="shrink-0 text-xs text-muted-foreground">
+            <span className="w-[104px] shrink-0 truncate text-xs text-muted-foreground">
               {columns.find((c) => c.id === task.column_id)?.name}
             </span>
           )}

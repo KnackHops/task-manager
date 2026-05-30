@@ -71,7 +71,7 @@ export function AssigneeSelect({
             selectedMembers.map((m) => (
               <span
                 key={m.user_id}
-                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground"
+                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium capitalize text-foreground"
                 onClick={(e) => e.stopPropagation()}
               >
                 <Avatar
@@ -141,7 +141,7 @@ export function AssigneeSelect({
                 url={m.profile.avatar_url}
                 size="sm"
               />
-              <span className="truncate">{m.profile.full_name}</span>
+              <span className="truncate capitalize">{m.profile.full_name}</span>
             </button>
           ))}
           {members.length === 0 && (

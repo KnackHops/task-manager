@@ -44,7 +44,7 @@ export function Header({ onMenuClick, projectSlug }: HeaderProps) {
 
       <div className="flex items-center gap-2">
         {profile && (
-          <Link to="/settings" className="text-xs text-muted-foreground hidden sm:block hover:text-foreground transition-colors">
+          <Link to="/settings" className="text-xs text-muted-foreground hidden sm:block capitalize hover:text-foreground transition-colors">
             {profile.full_name}
           </Link>
         )}

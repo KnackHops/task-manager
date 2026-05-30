@@ -74,7 +74,7 @@ export function MentionDropdown({
             size="sm"
           />
           <div className="min-w-0 flex-1 text-left">
-            <div className="truncate font-medium text-foreground">
+            <div className="truncate font-medium capitalize text-foreground">
               {m.profile.full_name}
             </div>
             <div className="truncate text-xs text-muted-foreground">

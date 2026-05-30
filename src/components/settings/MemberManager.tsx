@@ -134,7 +134,7 @@ export function MemberManager({ projectId, isOwner, canManageMembers }: MemberMa
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-foreground truncate">
+                  <span className="text-sm font-medium text-foreground truncate capitalize">
                     {member.profile.full_name}
                   </span>
                   {member.status === 'pending' ? (

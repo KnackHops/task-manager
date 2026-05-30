@@ -299,7 +299,7 @@ export function CommentItem({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground">
+          <span className="text-sm font-medium capitalize text-foreground">
             {comment.author?.full_name ?? 'Deleted User'}
           </span>
           <span className="text-xs text-muted-foreground">

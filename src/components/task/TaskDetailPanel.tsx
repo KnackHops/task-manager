@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/Select'
 import { TagSelect } from '@/components/ui/TagSelect'
 import { AssigneeSelect } from '@/components/ui/AssigneeSelect'
 import { Avatar } from '@/components/ui/Avatar'
+import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import {
   useTask,
   useUpdateTask,
@@ -421,9 +422,7 @@ export function TaskDetailPanel({
         <div className="flex items-center justify-between gap-3 pr-10">
           <div className="flex min-w-0 items-center gap-2">
             {project.prefix && (
-              <span className="text-sm font-medium text-primary font-mono shrink-0">
-                {project.prefix}-{task.task_number}
-              </span>
+              <TaskNumberPill taskId={`${project.prefix}-${task.task_number}`} />
             )}
             {isEditingTitle ? (
               <input
@@ -602,7 +601,7 @@ export function TaskDetailPanel({
                 url={task.creator?.avatar_url ?? null}
                 size="sm"
               />
-              <span>Created by {task.creator?.full_name ?? 'Deleted User'}</span>
+              <span>Created by <span className="capitalize">{task.creator?.full_name ?? 'Deleted User'}</span></span>
             </div>
           )}
           <span>
