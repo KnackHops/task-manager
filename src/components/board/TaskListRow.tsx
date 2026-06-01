@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Draggable } from '@hello-pangea/dnd'
-import { GripVertical, Pencil, MessageSquare, Paperclip, Zap } from 'lucide-react'
+import { GitMerge, GripVertical, Pencil, MessageSquare, Paperclip, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PriorityBadge, TagBadge } from '@/components/ui/Badge'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
@@ -25,8 +25,6 @@ export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
   const [titleDraft, setTitleDraft] = useState(task.title)
 
   const taskId = project.prefix ? `${project.prefix}-${task.task_number}` : null
-  const inDoneColumn = doneColumnIds.includes(task.column_id)
-
   const stop = (e: React.MouseEvent | React.KeyboardEvent) => e.stopPropagation()
 
   const startEdit = (e: React.MouseEvent) => {
@@ -100,10 +98,10 @@ export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
             <input
               type="checkbox"
               checked={task.is_done}
-              disabled={inDoneColumn || updateTask.isPending}
+              disabled={updateTask.isPending}
               onClick={stop}
               onChange={toggleDone}
-              title={inDoneColumn ? 'Task is in a done column' : 'Mark as done'}
+              title="Mark as done"
               className="shrink-0 accent-emerald-500 disabled:opacity-40"
             />
           ) : (
@@ -211,6 +209,16 @@ export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
               </div>
             )}
           </div>
+
+          {/* Dependencies */}
+          {task.dependencies && task.dependencies.length > 0 && (
+            <div className="hidden shrink-0 items-center gap-1 overflow-hidden text-[11px] text-muted-foreground md:flex">
+              <GitMerge className={cn('h-3 w-3 shrink-0', task.dependencies.every((d) => d.is_done) && 'text-emerald-500')} />
+              {task.dependencies.map((d) => (
+                <span key={d.id} className={cn(d.is_done && 'text-emerald-500')}>{project.prefix}-{d.task_number}</span>
+              ))}
+            </div>
+          )}
 
           {canEditTask ? (
             <select

@@ -176,7 +176,7 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
         if (!fromTask) continue
         const fromEndPx = (differenceInCalendarDays(parseISO(fromTask.due_date!), rangeStart) + 1) * pxPerDay
         const toStartPx = differenceInCalendarDays(parseISO(task.start_date!), rangeStart) * pxPerDay
-        result.push({ fromId: dep.id, toId: task.id, fromEndPx, toStartPx, fromY, toY, done: dep.is_done })
+        result.push({ fromId: dep.id, toId: task.id, fromEndPx, toStartPx, fromY, toY, done: fromTask.is_done })
       }
     }
     return result

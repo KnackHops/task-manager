@@ -464,12 +464,9 @@ export function TaskDetailPanel({
           {(canEditTask || canArchiveTask || canDeleteTask) && (
             <div className="flex shrink-0 items-center gap-1.5">
               {canEditTask && (() => {
-                const inDoneColumn = doneColumnIds.includes(task.column_id)
-                const canToggle = !inDoneColumn || !task.is_done
                 return (
                   <button
                     onClick={() => {
-                      if (!canToggle) return
                       if (!task.is_done && unfinishedDeps.length > 0) {
                         setShowDepsConfirm(true)
                         return
@@ -485,8 +482,7 @@ export function TaskDetailPanel({
                         { onError: (err) => toast.error(err.message) }
                       )
                     }}
-                    disabled={!canToggle}
-                    title={!canToggle ? 'Move task out of done column to toggle' : task.is_done ? 'Completed' : 'Mark as Done'}
+                    title={task.is_done ? 'Completed' : 'Mark as Done'}
                     className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
                       task.is_done
                         ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20'

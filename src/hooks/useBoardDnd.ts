@@ -34,6 +34,7 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
     fromColumnId: string
     toColumnId: string
     toIndex: number
+    isDoneOverride?: { is_done: boolean; done_at: string | null }
   } | null>(null)
 
   const grouped = useMemo(() => {
@@ -68,7 +69,7 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
           if (toCol && task) {
             const movedTask =
               fromColumnId !== toColumnId
-                ? { ...task, column_id: toColumnId }
+                ? { ...task, column_id: toColumnId, ...(pendingReorder.isDoneOverride ?? {}) }
                 : task
             toCol.splice(toIndex, 0, movedTask)
           }
@@ -111,6 +112,7 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
       fromColumnId: source.droppableId,
       toColumnId: destination.droppableId,
       toIndex: destination.index,
+      isDoneOverride,
     })
 
     // Also update React Query cache so data persists after pendingReorder clears

@@ -1,5 +1,5 @@
 import { Draggable } from '@hello-pangea/dnd'
-import { MessageSquare, Paperclip, Zap } from 'lucide-react'
+import { GitMerge, MessageSquare, Paperclip, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TagBadge } from '@/components/ui/Badge'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
@@ -60,6 +60,15 @@ export function TaskCard({ task, index, onClick }: TaskCardProps) {
           <p className="mt-1.5 text-sm font-medium text-card-foreground line-clamp-2">
             {task.title}
           </p>
+
+          {task.dependencies && task.dependencies.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+              <GitMerge className={cn('h-3 w-3 shrink-0', task.dependencies.every((d) => d.is_done) && 'text-emerald-500')} />
+              {task.dependencies.map((d) => (
+                <span key={d.id} className={cn(d.is_done && 'text-emerald-500')}>{project.prefix}-{d.task_number}</span>
+              ))}
+            </div>
+          )}
 
           {((task.comment_count ?? 0) > 0 ||
             (task.attachment_count ?? 0) > 0 ||
