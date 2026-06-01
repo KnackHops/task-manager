@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   parseISO,
   differenceInCalendarDays,
@@ -16,12 +17,15 @@ import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import { GanttBar } from './GanttBar'
+import { ScheduleTaskDialog } from './ScheduleTaskDialog'
 import { useTasks } from '@/hooks/useTasks'
 import { useProjectContext } from '@/contexts/ProjectContext'
+import type { TaskWithRelations } from '@/types/database'
 
 const LABEL_W = 220
 const ROW_H = 32
 const DAY_PX = { day: 34, week: 16 } as const
+const MIN_TIMELINE_W = 600
 
 interface GanttViewProps {
   projectId: string
@@ -33,9 +37,35 @@ function collapseKey(projectId: string) {
 }
 
 export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
-  const { project, columns } = useProjectContext()
+  const { project, columns, canEditTask } = useProjectContext()
   const { data: tasks, isLoading } = useTasks(projectId)
   const [scale, setScale] = useState<'day' | 'week'>('week')
+  const [scheduleTarget, setScheduleTarget] = useState<{
+    task: TaskWithRelations
+    startDate: string
+    dueDate: string
+  } | null>(null)
+  const chipDragRef = useRef<{ startX: number; startY: number; moved: boolean; task: TaskWithRelations } | null>(null)
+  const timelineBodyRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const roRef = useRef<ResizeObserver | null>(null)
+  const [containerW, setContainerW] = useState(0)
+  const containerCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    if (roRef.current) {
+      roRef.current.disconnect()
+      roRef.current = null
+    }
+    containerRef.current = node
+    if (node) {
+      setContainerW(node.clientWidth)
+      const ro = new ResizeObserver(([entry]) => {
+        if (entry) setContainerW(entry.contentRect.width)
+      })
+      ro.observe(node)
+      roRef.current = ro
+    }
+  }, [])
+  const [dragGhost, setDragGhost] = useState<{ task: TaskWithRelations; x: number; y: number } | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     try {
       const raw = localStorage.getItem(collapseKey(projectId))
@@ -66,7 +96,7 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
   }, [tasks])
 
   const { rangeStart, rangeEnd, pxPerDay, totalWidth } = useMemo(() => {
-    const px = DAY_PX[scale]
+    const basePx = DAY_PX[scale]
     const today = new Date()
     let start: Date
     let end: Date
@@ -80,8 +110,12 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
       end = endOfWeek(addDays(today, 21), { weekStartsOn: 1 })
     }
     const totalDays = differenceInCalendarDays(end, start) + 1
+    const availableW = containerW - LABEL_W
+    const px = totalDays > 0 && availableW > 0
+      ? Math.max(basePx, Math.floor(availableW / totalDays))
+      : basePx
     return { rangeStart: start, rangeEnd: end, pxPerDay: px, totalWidth: totalDays * px }
-  }, [scheduled, scale])
+  }, [scheduled, scale, containerW])
 
   const headerCells = useMemo(() => {
     if (scale === 'day') {
@@ -111,13 +145,113 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
   const todayLeft = differenceInCalendarDays(new Date(), rangeStart) * pxPerDay
   const todayVisible = todayLeft >= 0 && todayLeft <= totalWidth
 
+  /* ── Dependency arrows ── */
+  const { taskYMap, bodyHeight } = useMemo(() => {
+    const map = new Map<string, number>()
+    let y = 0
+    for (const col of columns) {
+      y += ROW_H // group header
+      if (!(collapsed[col.id] ?? false)) {
+        const rows = scheduled
+          .filter((t) => t.column_id === col.id)
+          .sort((a, b) => (a.start_date! < b.start_date! ? -1 : 1))
+        for (const task of rows) {
+          map.set(task.id, y + ROW_H / 2)
+          y += ROW_H
+        }
+      }
+    }
+    return { taskYMap: map, bodyHeight: y }
+  }, [columns, scheduled, collapsed])
+
+  const arrows = useMemo(() => {
+    const result: { fromId: string; toId: string; fromEndPx: number; toStartPx: number; fromY: number; toY: number; done: boolean }[] = []
+    for (const task of scheduled) {
+      const toY = taskYMap.get(task.id)
+      if (toY === undefined) continue
+      for (const dep of task.dependencies ?? []) {
+        const fromY = taskYMap.get(dep.id)
+        if (fromY === undefined) continue
+        const fromTask = scheduled.find((t) => t.id === dep.id)
+        if (!fromTask) continue
+        const fromEndPx = (differenceInCalendarDays(parseISO(fromTask.due_date!), rangeStart) + 1) * pxPerDay
+        const toStartPx = differenceInCalendarDays(parseISO(task.start_date!), rangeStart) * pxPerDay
+        result.push({ fromId: dep.id, toId: task.id, fromEndPx, toStartPx, fromY, toY, done: dep.is_done })
+      }
+    }
+    return result
+  }, [scheduled, taskYMap, rangeStart, pxPerDay])
+
+  /* ── Drag-to-schedule handlers for unscheduled chips ── */
+  const DEFAULT_DURATION_DAYS = 3
+
+  const onChipPointerDown = useCallback(
+    (e: React.PointerEvent, task: TaskWithRelations) => {
+      if (!canEditTask) return
+      ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+      chipDragRef.current = { startX: e.clientX, startY: e.clientY, moved: false, task }
+    },
+    [canEditTask],
+  )
+
+  const onChipPointerMove = useCallback((e: React.PointerEvent) => {
+    const drag = chipDragRef.current
+    if (!drag) return
+    const dx = e.clientX - drag.startX
+    const dy = e.clientY - drag.startY
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) drag.moved = true
+    if (drag.moved) setDragGhost({ task: drag.task, x: e.clientX, y: e.clientY })
+  }, [])
+
+  const onChipPointerUp = useCallback(
+    (e: React.PointerEvent, task: TaskWithRelations) => {
+      const drag = chipDragRef.current
+      chipDragRef.current = null
+      setDragGhost(null)
+      if (!drag) return
+
+      if (!drag.moved) {
+        onTaskClick(task.id)
+        return
+      }
+
+      if (!timelineBodyRef.current) return
+      const rect = timelineBodyRef.current.getBoundingClientRect()
+      const timelineX = e.clientX - rect.left - LABEL_W
+
+      if (timelineX < 0 || timelineX > totalWidth) return
+
+      const dayOffset = Math.floor(timelineX / pxPerDay)
+      const startDate = addDays(rangeStart, dayOffset)
+      const dueDate = addDays(startDate, DEFAULT_DURATION_DAYS)
+
+      setScheduleTarget({
+        task,
+        startDate: format(startDate, 'yyyy-MM-dd'),
+        dueDate: format(dueDate, 'yyyy-MM-dd'),
+      })
+    },
+    [onTaskClick, rangeStart, pxPerDay, totalWidth],
+  )
+
   if (isLoading) {
     return (
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-40" />
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-8 w-full" />
-        ))}
+      <div className="flex h-full flex-col gap-3">
+        <Skeleton className="h-8 w-32 rounded-lg" />
+        <div className="flex-1 rounded-lg border border-border">
+          <div className="flex border-b border-border px-3 py-2">
+            <Skeleton className="h-4 w-full" />
+          </div>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 border-b border-border/40 px-3 py-1.5">
+              <Skeleton className="h-4 w-28 shrink-0" />
+              <Skeleton
+                className="h-5 rounded"
+                style={{ width: `${30 + ((i * 17) % 40)}%`, marginLeft: `${5 + ((i * 13) % 25)}%` }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -133,7 +267,7 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
               onClick={() => setScale(s)}
               className={cn(
                 'rounded-md px-2.5 py-1 capitalize transition-colors',
-                scale === s ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+                scale === s ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
               {s}
@@ -146,8 +280,8 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
       </div>
 
       {/* Timeline */}
-      <div className="flex-1 overflow-auto rounded-lg border border-border">
-        <div style={{ minWidth: LABEL_W + totalWidth }}>
+      <div ref={containerCallbackRef} className="flex-1 overflow-auto rounded-lg border border-border">
+        <div style={{ minWidth: LABEL_W + Math.max(totalWidth, MIN_TIMELINE_W) }}>
           {/* Header */}
           <div className="sticky top-0 z-20 flex border-b border-border bg-card">
             <div
@@ -172,12 +306,40 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
           </div>
 
           {/* Body */}
-          <div className="relative">
+          <div className="relative" ref={timelineBodyRef}>
             {todayVisible && (
               <div
                 className="pointer-events-none absolute bottom-0 top-0 z-0 w-px bg-primary/50"
                 style={{ left: LABEL_W + todayLeft }}
               />
+            )}
+
+            {/* Dependency arrows */}
+            {arrows.length > 0 && (
+              <svg className="pointer-events-none absolute top-0 z-5" style={{ left: LABEL_W }} width={totalWidth} height={bodyHeight}>
+                <defs>
+                  <marker id="dep-arrow" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+                    <polygon points="0 0, 6 2, 0 4" className="fill-foreground/40" />
+                  </marker>
+                  <marker id="dep-arrow-done" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+                    <polygon points="0 0, 6 2, 0 4" className="fill-emerald-500/60" />
+                  </marker>
+                </defs>
+                {arrows.map(({ fromId, toId, fromEndPx, toStartPx, fromY, toY, done }) => {
+                  const midX = (fromEndPx + toStartPx) / 2
+                  return (
+                    <path
+                      key={`${fromId}-${toId}`}
+                      d={`M ${fromEndPx} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toStartPx} ${toY}`}
+                      fill="none"
+                      className={done ? 'stroke-emerald-500/60' : 'stroke-foreground/40'}
+                      strokeWidth={1.5}
+                      strokeDasharray={done ? '4 2' : undefined}
+                      markerEnd={done ? 'url(#dep-arrow-done)' : 'url(#dep-arrow)'}
+                    />
+                  )
+                })}
+              </svg>
             )}
 
             {columns.map((col) => {
@@ -188,10 +350,10 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
               return (
                 <div key={col.id}>
                   {/* Group header */}
-                  <div className="flex border-b border-border bg-muted/30">
+                  <div className="flex border-b border-border bg-muted/30" style={{ height: ROW_H }}>
                     <button
                       onClick={() => toggleCollapse(col.id)}
-                      className="sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-border bg-muted/30 px-2 py-1.5 text-xs font-semibold text-foreground"
+                      className="sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-border bg-muted/30 px-2 text-xs font-semibold text-foreground"
                       style={{ width: LABEL_W }}
                     >
                       {isCollapsed ? (
@@ -262,8 +424,14 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
               return (
                 <button
                   key={task.id}
-                  onClick={() => onTaskClick(task.id)}
-                  className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-xs text-card-foreground hover:bg-muted/50"
+                  onPointerDown={(e) => onChipPointerDown(e, task)}
+                  onPointerMove={onChipPointerMove}
+                  onPointerUp={(e) => onChipPointerUp(e, task)}
+                  onPointerCancel={() => { chipDragRef.current = null; setDragGhost(null) }}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-xs text-card-foreground hover:bg-muted/50 touch-none',
+                    canEditTask && 'cursor-grab active:cursor-grabbing active:opacity-60',
+                  )}
                 >
                   {taskId && <span className="font-mono text-[10px] text-primary">{taskId}</span>}
                   <span className="max-w-[200px] truncate">{task.title}</span>
@@ -272,10 +440,38 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
             })}
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Set a start and due date on a task to place it on the timeline.
+            {canEditTask
+              ? 'Drag a task onto the timeline to schedule it, or click to open details.'
+              : 'Set a start and due date on a task to place it on the timeline.'}
           </p>
         </div>
       )}
+
+      {scheduleTarget && (
+        <ScheduleTaskDialog
+          task={scheduleTarget.task}
+          defaultStartDate={scheduleTarget.startDate}
+          defaultDueDate={scheduleTarget.dueDate}
+          onClose={() => setScheduleTarget(null)}
+          projectId={projectId}
+        />
+      )}
+
+      {dragGhost &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-50 flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-xs text-card-foreground opacity-70 shadow-lg"
+            style={{ left: dragGhost.x + 8, top: dragGhost.y - 14 }}
+          >
+            {project.prefix && (
+              <span className="font-mono text-[10px] text-primary">
+                {project.prefix}-{dragGhost.task.task_number}
+              </span>
+            )}
+            <span className="max-w-[200px] truncate">{dragGhost.task.title}</span>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

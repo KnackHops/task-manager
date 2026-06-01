@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { parseISO, differenceInCalendarDays, addDays, format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { useUpdateTask } from '@/hooks/useTasks'
@@ -33,6 +33,9 @@ export function GanttBar({ task, rangeStart, pxPerDay, onClick }: GanttBarProps)
   // Preview deltas (in days) applied live while dragging
   const [preview, setPreview] = useState<{ ds: number; de: number } | null>(null)
   const dragRef = useRef<{ mode: DragMode; startX: number; moved: boolean } | null>(null)
+
+  // Clear preview when task dates update from cache (avoids flicker)
+  useEffect(() => { setPreview(null) }, [task.start_date, task.due_date])
 
   const effOffset = startOffset + (preview?.ds ?? 0)
   const effDuration = duration + ((preview?.de ?? 0) - (preview?.ds ?? 0))
@@ -73,8 +76,7 @@ export function GanttBar({ task, rangeStart, pxPerDay, onClick }: GanttBarProps)
       return
     }
     const p = preview
-    setPreview(null)
-    if (!p) return
+    if (!p) { setPreview(null); return }
     let newStart = addDays(start, p.ds)
     let newDue = addDays(due, p.de)
     if (newDue < newStart) newDue = newStart
@@ -107,14 +109,14 @@ export function GanttBar({ task, rangeStart, pxPerDay, onClick }: GanttBarProps)
       {canEditTask && (
         <span
           onPointerDown={beginDrag('left')}
-          className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize rounded-l opacity-0 group-hover/bar:opacity-100 bg-black/20"
+          className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize rounded-l"
         />
       )}
       <span className={cn('truncate', task.is_done && 'line-through')}>{task.title}</span>
       {canEditTask && (
         <span
           onPointerDown={beginDrag('right')}
-          className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize rounded-r opacity-0 group-hover/bar:opacity-100 bg-black/20"
+          className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize rounded-r"
         />
       )}
     </div>

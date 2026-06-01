@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
-import { Paperclip, X } from 'lucide-react'
+import { Calendar, Paperclip, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogHeader, DialogTitle } from '@/components/ui/Dialog'
 import { Select } from '@/components/ui/Select'
@@ -466,27 +466,33 @@ export function CreateTaskDialog({
             <label htmlFor="start-date" className="text-sm font-medium text-foreground">
               Start Date
             </label>
-            <input
-              id="start-date"
-              type="date"
-              value={startDate}
-              max={dueDate || undefined}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [color-scheme:dark]"
-            />
+            <div className="relative flex items-center">
+              <input
+                id="start-date"
+                type="date"
+                value={startDate}
+                max={dueDate || undefined}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+              />
+              <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
+            </div>
           </div>
           <div className="space-y-2">
             <label htmlFor="due-date" className="text-sm font-medium text-foreground">
               Due Date
             </label>
-            <input
-              id="due-date"
-              type="date"
-              value={dueDate}
-              min={startDate || undefined}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [color-scheme:dark]"
-            />
+            <div className="relative flex items-center">
+              <input
+                id="due-date"
+                type="date"
+                value={dueDate}
+                min={startDate || undefined}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+              />
+              <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
+            </div>
           </div>
         </div>
 

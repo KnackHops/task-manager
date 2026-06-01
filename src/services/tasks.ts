@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase'
 import type {
   Task,
   TaskWithRelations,
+  TaskDependency,
   CreateTaskInput,
   UpdateTaskInput,
 } from '@/types/database'
@@ -32,7 +33,28 @@ function flattenTaskRow(row: Record<string, unknown>): TaskWithRelations {
     : []
   const comment_count = Array.isArray(comments) ? (comments[0] as { count: number })?.count ?? 0 : 0
   const attachment_count = Array.isArray(attachments) ? (attachments[0] as { count: number })?.count ?? 0 : 0
-  return { ...rest, tags, assignees, comment_count, attachment_count } as TaskWithRelations
+  return { ...rest, tags, assignees, dependencies: [], comment_count, attachment_count } as unknown as TaskWithRelations
+}
+
+async function fetchDependenciesForTasks(
+  taskIds: string[],
+): Promise<Map<string, TaskDependency[]>> {
+  if (taskIds.length === 0) return new Map()
+  const { data, error } = await supabase
+    .from('task_dependencies')
+    .select('task_id, dependency:tasks!depends_on_id(id, task_number, title, is_done)')
+    .in('task_id', taskIds)
+  if (error) throw error
+  const map = new Map<string, TaskDependency[]>()
+  for (const row of data ?? []) {
+    const dep = (row as Record<string, unknown>).dependency as TaskDependency | null
+    if (!dep) continue
+    const taskId = row.task_id as string
+    const list = map.get(taskId) ?? []
+    list.push(dep)
+    map.set(taskId, list)
+  }
+  return map
 }
 
 export async function fetchTasks(
@@ -74,6 +96,12 @@ export async function fetchTasks(
 
   const tasks = (data ?? []).map((row) => flattenTaskRow(row as Record<string, unknown>))
 
+  // Fetch dependencies separately (PostgREST can't do self-referential join)
+  const depsMap = await fetchDependenciesForTasks(tasks.map((t) => t.id))
+  for (const t of tasks) {
+    t.dependencies = depsMap.get(t.id) ?? []
+  }
+
   // Client-side filter by tag slug if needed
   if (filters?.tagSlug) {
     return tasks.filter((t) =>
@@ -94,7 +122,10 @@ export async function fetchTask(
     .single()
 
   if (error) throw error
-  return flattenTaskRow(data as Record<string, unknown>)
+  const task = flattenTaskRow(data as Record<string, unknown>)
+  const depsMap = await fetchDependenciesForTasks([task.id])
+  task.dependencies = depsMap.get(task.id) ?? []
+  return task
 }
 
 export const ARCHIVED_PAGE_SIZE = 30
@@ -136,6 +167,11 @@ export async function fetchArchivedTasks(
   const rows = (data ?? []).map((row) => flattenTaskRow(row as Record<string, unknown>))
   const hasMore = rows.length > ARCHIVED_PAGE_SIZE
   if (hasMore) rows.pop()
+
+  const depsMap = await fetchDependenciesForTasks(rows.map((t) => t.id))
+  for (const t of rows) {
+    t.dependencies = depsMap.get(t.id) ?? []
+  }
 
   return { data: rows, hasMore }
 }

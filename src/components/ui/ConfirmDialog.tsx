@@ -5,7 +5,7 @@ interface ConfirmDialogProps {
   onClose: () => void
   onConfirm: () => void
   title: string
-  description: string
+  description: React.ReactNode
   confirmLabel?: string
   confirmVariant?: 'danger' | 'default'
   isPending?: boolean
@@ -26,7 +26,7 @@ export function ConfirmDialog({
       <DialogHeader>
         <DialogTitle>{title}</DialogTitle>
       </DialogHeader>
-      <p className="text-sm text-muted-foreground mb-6">{description}</p>
+      <div className="text-sm text-muted-foreground mb-6">{description}</div>
       <div className="flex justify-end gap-2">
         <button
           type="button"

@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
-import { Trash2, Archive, ArchiveRestore, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { Calendar, Trash2, Archive, ArchiveRestore, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import { Dialog, DialogHeader, DialogTitle } from '@/components/ui/Dialog'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Select } from '@/components/ui/Select'
 import { TagSelect } from '@/components/ui/TagSelect'
 import { AssigneeSelect } from '@/components/ui/AssigneeSelect'
+import { DependencySelect } from '@/components/ui/DependencySelect'
 import { Avatar } from '@/components/ui/Avatar'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import {
   useTask,
+  useTasks,
   useUpdateTask,
   useDeleteTask,
   useArchiveTask,
@@ -18,6 +20,7 @@ import {
 } from '@/hooks/useTasks'
 import { useSetTaskTags } from '@/hooks/useTags'
 import { useSetTaskAssignees } from '@/hooks/useAssignees'
+import { useSetTaskDependencies } from '@/hooks/useDependencies'
 import { useSprints } from '@/hooks/useSprints'
 import { useMembers } from '@/hooks/useMembers'
 import { useProjectContext } from '@/contexts/ProjectContext'
@@ -76,6 +79,8 @@ export function TaskDetailPanel({
   const unarchiveTask = useUnarchiveTask(projectId)
   const setTaskTags = useSetTaskTags(projectId)
   const setTaskAssignees = useSetTaskAssignees(projectId)
+  const setTaskDependencies = useSetTaskDependencies(projectId)
+  const { data: allProjectTasks } = useTasks(projectId)
   const { data: sprints } = useSprints(projectId)
   const { data: members } = useMembers(projectId)
   const { user } = useAuth()
@@ -87,6 +92,7 @@ export function TaskDetailPanel({
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [isEditingDesc, setIsEditingDesc] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showDepsConfirm, setShowDepsConfirm] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(() => {
     const saved = localStorage.getItem('taskDetailPanelDetailsOpen')
     return saved === null ? true : saved === 'true'
@@ -407,6 +413,13 @@ export function TaskDetailPanel({
     )
   }
 
+  const handleDependenciesChange: React.ComponentProps<typeof DependencySelect>['onChange'] = (depIds, deps) => {
+    setTaskDependencies.mutate(
+      { taskId, dependsOnIds: depIds, dependencies: deps },
+      { onError: (err) => toast.error(err.message) },
+    )
+  }
+
   const columnOptions = columns.map((c) => ({
     value: c.id,
     label: c.name,
@@ -414,6 +427,8 @@ export function TaskDetailPanel({
 
   const currentTagIds = task.tags?.map((t) => t.id) ?? []
   const currentAssigneeIds = task.assignees?.map((a) => a.id) ?? []
+  const currentDependencyIds = task.dependencies?.map((d) => d.id) ?? []
+  const unfinishedDeps = task.dependencies?.filter((d) => !d.is_done) ?? []
   const descSegments = task.description ? parseBody(task.description) : null
 
   return (
@@ -455,6 +470,10 @@ export function TaskDetailPanel({
                   <button
                     onClick={() => {
                       if (!canToggle) return
+                      if (!task.is_done && unfinishedDeps.length > 0) {
+                        setShowDepsConfirm(true)
+                        return
+                      }
                       updateTask.mutate(
                         {
                           taskId,
@@ -639,7 +658,7 @@ export function TaskDetailPanel({
                   onChange={(e) => {
                     const newColId = e.target.value
                     const movingIntoDone = doneColumnIds.includes(newColId) && !doneColumnIds.includes(task.column_id)
-                    if (movingIntoDone) {
+                    if (movingIntoDone && unfinishedDeps.length === 0) {
                       updateTask.mutate(
                         { taskId, input: { column_id: newColId, is_done: true, done_at: new Date().toISOString() } },
                         { onError: (err) => toast.error(err.message) }
@@ -702,30 +721,36 @@ export function TaskDetailPanel({
                   <label htmlFor="detail-start-date" className="text-sm font-medium text-foreground">
                     Start Date
                   </label>
-                  <input
-                    id="detail-start-date"
-                    type="date"
-                    disabled={!canEditTask}
-                    value={task.start_date ?? ''}
-                    max={task.due_date ?? undefined}
-                    onChange={(e) => handleFieldUpdate('start_date', e.target.value || null)}
-                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 [color-scheme:dark]"
-                  />
+                  <div className="relative flex items-center">
+                    <input
+                      id="detail-start-date"
+                      type="date"
+                      disabled={!canEditTask}
+                      value={task.start_date ?? ''}
+                      max={task.due_date ?? undefined}
+                      onChange={(e) => handleFieldUpdate('start_date', e.target.value || null)}
+                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-default [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                    />
+                    <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
                   <label htmlFor="detail-due-date" className="text-sm font-medium text-foreground">
                     Due Date
                   </label>
-                  <input
-                    id="detail-due-date"
-                    type="date"
-                    disabled={!canEditTask}
-                    value={task.due_date ?? ''}
-                    min={task.start_date ?? undefined}
-                    onChange={(e) => handleFieldUpdate('due_date', e.target.value || null)}
-                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 [color-scheme:dark]"
-                  />
+                  <div className="relative flex items-center">
+                    <input
+                      id="detail-due-date"
+                      type="date"
+                      disabled={!canEditTask}
+                      value={task.due_date ?? ''}
+                      min={task.start_date ?? undefined}
+                      onChange={(e) => handleFieldUpdate('due_date', e.target.value || null)}
+                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-default [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                    />
+                    <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
+                  </div>
                 </div>
 
                 <AssigneeSelect
@@ -741,6 +766,17 @@ export function TaskDetailPanel({
                   onChange={handleTagsChange}
                   label="Tags"
                 />
+
+                <div className="sm:col-span-2">
+                  <DependencySelect
+                    tasks={allProjectTasks ?? []}
+                    currentTaskId={taskId}
+                    selectedIds={currentDependencyIds}
+                    onChange={handleDependenciesChange}
+                    label="Dependencies"
+                    prefix={project.prefix}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -778,6 +814,39 @@ export function TaskDetailPanel({
         description="Delete this task? This action cannot be undone."
         confirmLabel="Delete"
         isPending={deleteTask.isPending}
+      />
+
+      <ConfirmDialog
+        open={showDepsConfirm}
+        onClose={() => setShowDepsConfirm(false)}
+        onConfirm={() => {
+          updateTask.mutate(
+            { taskId, input: { is_done: true, done_at: new Date().toISOString() } },
+            {
+              onSuccess: () => setShowDepsConfirm(false),
+              onError: (err) => toast.error(err.message),
+            },
+          )
+        }}
+        title="Unfinished Dependencies"
+        description={
+          <div>
+            <p>This task has unfinished dependencies:</p>
+            <ul className="mt-2 space-y-1">
+              {unfinishedDeps.map((d) => (
+                <li key={d.id} className="flex items-center gap-1.5">
+                  <span className="font-mono text-xs text-primary">
+                    {project.prefix}-{d.task_number}
+                  </span>
+                  <span className="truncate">{d.title}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        }
+        confirmLabel="Mark Done"
+        confirmVariant="default"
+        isPending={updateTask.isPending}
       />
     </Dialog>
   )

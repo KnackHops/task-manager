@@ -121,11 +121,19 @@ export interface Task {
   updated_at: string
 }
 
+export interface TaskDependency {
+  id: string
+  task_number: number
+  title: string
+  is_done: boolean
+}
+
 export interface TaskWithRelations extends Task {
   assignees?: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>[]
   creator?: Pick<Profile, 'id' | 'full_name' | 'avatar_url'> | null
   column?: Pick<ProjectColumn, 'id' | 'name' | 'slug'> | null
   tags?: Pick<ProjectTag, 'id' | 'name' | 'slug' | 'color'>[]
+  dependencies?: TaskDependency[]
   comment_count?: number
   attachment_count?: number
 }
