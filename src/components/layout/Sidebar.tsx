@@ -10,6 +10,7 @@ import {
   CalendarRange,
   UserPlus,
   Star,
+  ListTodo,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -105,6 +106,18 @@ export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
           <div className="flex flex-1 flex-col">
             {/* Nav links */}
             <div className="space-y-0.5">
+              <Link
+                to="/my-work"
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                  currentPath === '/my-work'
+                    ? 'bg-primary/10 text-primary font-medium'
+                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                )}
+              >
+                <ListTodo className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>My Work</span>}
+              </Link>
               <Link
                 to="/projects"
                 className={cn(
