@@ -33,7 +33,7 @@ stop using it. v1 is deliberately minimal.
 | Prioritization | Private per-user drag-rank, independent of the team `priority` field. Owner only — nobody else sees it. |
 | Mark complete | Reuses existing `tasks.is_done` / `done_at`. No new field. Completed tasks drop off the active list; their logged time stays. |
 | Records | Today total + month total + per-sprint total + per-task total. All `SUM`-derived, no stored aggregates. **No estimate hours.** |
-| Log view | Chronological per-entry list (user · task · date · in → out · duration). Repeats kept separate. |
+| Log view | Chronological per-entry list (user · task · date · in → out · duration). Repeats kept separate. **Two surfaces:** own log (Log tab on `/my-work`, filtered to me, all projects) and team log (a **Logs tab inside each project**, all members, that project only). |
 | Log visibility | **Project-wide.** Any member of a task's project can read all sessions on that project's tasks. (Doubles as a team activity/attendance feed.) |
 | Rank visibility | Private. Owner reads/writes only their own rows. |
 | MCP | 4 new tools — `start_task_timer`, `stop_task_timer`, `get_timer_status`, `get_time_summary` — writing the **same** `task_time_sessions` table as the UI (one source of truth). |
@@ -143,8 +143,16 @@ Hooks in `src/hooks/` (TanStack Query, optimistic where it matters):
 - `RunningBar.tsx` — current session + live elapsed + stop.
 - `MyTaskRow.tsx` — one task: drag handle, title, project chip, total, start/stop, done.
 - `TimeTotals.tsx` — today / month / sprint figures (sprint via a small selector).
-- `SessionLog.tsx` — chronological entry list with member + date filters; reused both
-  on `/my-work` (my entries) and per-project (team feed).
+- `SessionLog.tsx` — chronological entry list with member + date filters; reused on
+  two surfaces:
+  - **Own log:** a Log tab on `/my-work`, filtered to the current user, across all projects.
+  - **Team log:** a per-project **Logs** view, all members, that project's tasks only.
+
+### Project Logs tab
+- Route `src/routes/_app/p/$slug/logs.tsx` (mirrors `gantt.tsx` / `sprints.tsx` — wraps
+  in project context, renders `SessionLog` scoped to the project).
+- `src/components/layout/Sidebar.tsx`: add a **Logs** nav link (lucide e.g. `History` /
+  `ClipboardList`) alongside Board / Gantt / Sprints / Archive, project-context aware.
 
 ### Log entry display
 ```
