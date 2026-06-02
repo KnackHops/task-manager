@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { TagBadge } from '@/components/ui/Badge'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import { Avatar } from '@/components/ui/Avatar'
+import { TaskTimerButton } from '@/components/task/TaskTimerButton'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import { useSprints } from '@/hooks/useSprints'
 import type { TaskWithRelations } from '@/types/database'
@@ -55,6 +56,7 @@ export function TaskCard({ task, index, onClick }: TaskCardProps) {
                 {task.story_points}
               </span>
             )}
+            <TaskTimerButton taskId={task.id} className="ml-auto" />
           </div>
 
           <p className="mt-1.5 text-sm font-medium text-card-foreground line-clamp-2">

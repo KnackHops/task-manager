@@ -31,3 +31,6 @@ src/routeTree.gen.ts
 # Misc
 *.tsbuildinfo
 todo
+
+# Local Claude Code instructions (not shared)
+CLAUDE.md

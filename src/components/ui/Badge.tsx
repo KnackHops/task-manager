@@ -1,5 +1,6 @@
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
+import type { TaskPriority } from '@/types/database'
 
 const priorityVariants = cva(
   'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
@@ -26,6 +27,30 @@ export function PriorityBadge({
     <span className={cn(priorityVariants({ priority }), className)}>
       {priority}
     </span>
+  )
+}
+
+// Compact priority indicator dot — same palette as PriorityBadge, for dense rows.
+const priorityDotColors: Record<TaskPriority, string> = {
+  critical: 'bg-red-500',
+  high: 'bg-orange-500',
+  medium: 'bg-yellow-500',
+  low: 'bg-muted-foreground/40',
+}
+
+export function PriorityDot({
+  priority,
+  className,
+}: {
+  priority: TaskPriority
+  className?: string
+}) {
+  return (
+    <span
+      className={cn('inline-block h-2 w-2 shrink-0 rounded-full', priorityDotColors[priority], className)}
+      title={`${priority} priority`}
+      aria-label={`${priority} priority`}
+    />
   )
 }
 

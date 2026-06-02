@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
-import { Plus, Star, Play, CheckCircle2, ListPlus, Loader2, LayoutGrid, List } from 'lucide-react'
+import { Plus, Star, Play, CheckCircle2, ListPlus, Loader2, LayoutGrid, List, UserCheck } from 'lucide-react'
 import { useIsFetching } from '@tanstack/react-query'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -11,6 +11,7 @@ import { useSprints, useCompleteSprint, sprintKeys } from '@/hooks/useSprints'
 import { useTasks } from '@/hooks/useTasks'
 import { BoardContainer } from '@/components/board/BoardContainer'
 import { BoardListView } from '@/components/board/BoardListView'
+import { MyTasksView } from '@/components/board/MyTasksView'
 import { cn } from '@/lib/utils'
 import { SprintFilterDropdown, type SprintFilterDropdownHandle } from '@/components/board/SprintFilterDropdown'
 import { SprintTaskSelectionPanel } from '@/components/board/SprintTaskSelectionPanel'
@@ -43,7 +44,7 @@ function BoardPage() {
   const { task: taskFromUrl, sprint: sprintFromUrl } = Route.useSearch()
   const sprintDropdownRef = useRef<SprintFilterDropdownHandle>(null)
   const [createOpen, setCreateOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<'board' | 'list'>(() => {
+  const [viewMode, setViewMode] = useState<'board' | 'list' | 'mine'>(() => {
     const saved = localStorage.getItem('boardViewMode')
     return saved === 'list' ? 'list' : 'board'
   })
@@ -244,6 +245,19 @@ function BoardPage() {
               <List className="h-4 w-4" />
             </button>
           </div>
+          <button
+            onClick={() => setViewMode(viewMode === 'mine' ? 'board' : 'mine')}
+            title="My tasks on this project"
+            className={cn(
+              'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+              viewMode === 'mine'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-input text-foreground hover:bg-muted'
+            )}
+          >
+            <UserCheck className="h-4 w-4" />
+            My Tasks
+          </button>
           {currentSprint && canManageSprints ? (
             <>
               {currentSprint.status === 'planning' && (
@@ -309,7 +323,14 @@ function BoardPage() {
       </div>
 
       <div className="flex-1 min-h-0">
-        {viewMode === 'board' ? (
+        {viewMode === 'mine' ? (
+          <MyTasksView
+            projectId={project.id}
+            projectPrefix={project.prefix}
+            activeSprint={activeSprint ? { id: activeSprint.id, name: activeSprint.name } : null}
+            onTaskClick={(taskId) => setSelectedTaskId(taskId)}
+          />
+        ) : viewMode === 'board' ? (
           <BoardContainer
             projectId={project.id}
             sprintId={boardSprintId}

@@ -97,15 +97,22 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
     const sprintIdOverride =
       isMovingIntoSprintColumn && activeSprint ? activeSprint.id : undefined
 
-    // Auto-mark done when moving into a done column (skip if unfinished deps)
+    // Auto-mark done when moving into a done column (skip if unfinished deps);
+    // auto-clear done when moving back out of a done column into a non-done one.
     const isMovingIntoDoneColumn =
       doneColumnIds.includes(destination.droppableId) &&
       !doneColumnIds.includes(source.droppableId)
+    const isMovingOutOfDoneColumn =
+      doneColumnIds.includes(source.droppableId) &&
+      !doneColumnIds.includes(destination.droppableId)
     const draggedTask = tasks?.find((t) => t.id === draggableId)
     const hasUnfinishedDeps = draggedTask?.dependencies?.some((d) => !d.is_done) ?? false
-    const isDoneOverride = isMovingIntoDoneColumn && !hasUnfinishedDeps
-      ? { is_done: true as const, done_at: new Date().toISOString() }
-      : undefined
+    const isDoneOverride =
+      isMovingIntoDoneColumn && !hasUnfinishedDeps
+        ? { is_done: true as const, done_at: new Date().toISOString() }
+        : isMovingOutOfDoneColumn
+          ? { is_done: false as const, done_at: null }
+          : undefined
 
     setPendingReorder({
       taskId: draggableId,

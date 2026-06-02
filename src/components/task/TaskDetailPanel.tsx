@@ -44,6 +44,9 @@ import { InlineCommentImage } from '@/components/comment/InlineCommentImage'
 import { InlineFileLink } from '@/components/comment/InlineFileLink'
 import { MentionPopover } from '@/components/comment/MentionPopover'
 import { formatDistanceToNow } from 'date-fns'
+import { TaskTimerButton } from '@/components/task/TaskTimerButton'
+import { useTaskTotal } from '@/hooks/useTimeTracking'
+import { formatDuration } from '@/lib/time-format'
 
 interface TaskDetailPanelProps {
   taskId: string
@@ -84,6 +87,7 @@ export function TaskDetailPanel({
   const { data: sprints } = useSprints(projectId)
   const { data: members } = useMembers(projectId)
   const { user } = useAuth()
+  const { data: taskTotalSeconds } = useTaskTotal(user?.id, taskId)
   const queryClient = useQueryClient()
   const uploadAttachment = useUploadAttachment(taskId)
   const { data: taskAttachments } = useTaskAttachments(taskId)
@@ -461,8 +465,13 @@ export function TaskDetailPanel({
           </div>
 
           {/* Action buttons */}
-          {(canEditTask || canArchiveTask || canDeleteTask) && (
-            <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
+              <TaskTimerButton taskId={taskId} variant="labeled" />
+              {(taskTotalSeconds ?? 0) > 0 && (
+                <span className="text-xs tabular-nums text-muted-foreground" title="Your time on this task">
+                  {formatDuration(taskTotalSeconds ?? 0)}
+                </span>
+              )}
               {canEditTask && (() => {
                 return (
                   <button
@@ -525,8 +534,7 @@ export function TaskDetailPanel({
                   <span className="hidden sm:inline">Delete</span>
                 </button>
               )}
-            </div>
-          )}
+          </div>
         </div>
       </DialogHeader>
 
@@ -654,9 +662,15 @@ export function TaskDetailPanel({
                   onChange={(e) => {
                     const newColId = e.target.value
                     const movingIntoDone = doneColumnIds.includes(newColId) && !doneColumnIds.includes(task.column_id)
+                    const movingOutOfDone = doneColumnIds.includes(task.column_id) && !doneColumnIds.includes(newColId)
                     if (movingIntoDone && unfinishedDeps.length === 0) {
                       updateTask.mutate(
                         { taskId, input: { column_id: newColId, is_done: true, done_at: new Date().toISOString() } },
+                        { onError: (err) => toast.error(err.message) }
+                      )
+                    } else if (movingOutOfDone && task.is_done) {
+                      updateTask.mutate(
+                        { taskId, input: { column_id: newColId, is_done: false, done_at: null } },
                         { onError: (err) => toast.error(err.message) }
                       )
                     } else {
