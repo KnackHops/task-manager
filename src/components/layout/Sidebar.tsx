@@ -8,6 +8,7 @@ import {
   FolderKanban,
   Timer,
   CalendarRange,
+  History,
   UserPlus,
   Star,
   ListTodo,
@@ -36,6 +37,7 @@ export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
         { to: `/p/${projectSlug}`, label: 'Board', icon: LayoutDashboard, exact: true },
         { to: `/p/${projectSlug}/sprints`, label: 'Sprints', icon: Timer },
         { to: `/p/${projectSlug}/gantt`, label: 'Gantt', icon: CalendarRange },
+        { to: `/p/${projectSlug}/logs`, label: 'Logs', icon: History },
         { to: `/p/${projectSlug}/archive`, label: 'Archive', icon: Archive },
         { to: `/p/${projectSlug}/settings`, label: 'Settings', icon: Settings },
       ]
