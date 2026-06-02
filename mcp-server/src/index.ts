@@ -15,6 +15,10 @@ import { registerReadAttachment } from './tools/read-attachment.js'
 import { registerCreateTask } from './tools/create-task.js'
 import { registerUpdateTask } from './tools/update-task.js'
 import { registerAddComment } from './tools/add-comment.js'
+import { registerStartTaskTimer } from './tools/time-start.js'
+import { registerStopTaskTimer } from './tools/time-stop.js'
+import { registerGetTimerStatus } from './tools/time-status.js'
+import { registerGetTimeSummary } from './tools/time-summary.js'
 import {
   registerReadTaskMemory,
   registerWriteTaskMemory,
@@ -39,6 +43,10 @@ function createServer(ctx: RequestContext): McpServer {
   registerCreateTask(server, ctx)
   registerUpdateTask(server, ctx)
   registerAddComment(server, ctx)
+  registerStartTaskTimer(server, ctx)
+  registerStopTaskTimer(server, ctx)
+  registerGetTimerStatus(server, ctx)
+  registerGetTimeSummary(server, ctx)
   registerReadTaskMemory(server, ctx)
   registerWriteTaskMemory(server, ctx)
   registerDeleteTaskMemory(server, ctx)
