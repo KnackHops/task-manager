@@ -303,3 +303,44 @@ export interface ProjectListItem extends Project {
   member_count: number
   task_count: number
 }
+
+// --------------- Time Tracking / My Work Types ---------------
+
+export interface TimeSession {
+  id: string
+  task_id: string
+  user_id: string
+  started_at: string
+  ended_at: string | null
+  created_at: string
+}
+
+export interface TimeSessionWithTask extends TimeSession {
+  duration_seconds: number
+  user: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
+  task: {
+    id: string
+    title: string
+    task_number: number
+    project: { id: string; name: string; slug: string; prefix: string }
+  } | null
+}
+
+export interface MyWorkTask {
+  id: string
+  title: string
+  task_number: number
+  priority: TaskPriority
+  is_done: boolean
+  sprint_id: string | null
+  project: { id: string; name: string; slug: string; prefix: string }
+  total_seconds: number
+  rank: number | null
+}
+
+export interface SessionLogFilters {
+  projectId?: string
+  userId?: string
+  from?: string // ISO date (inclusive)
+  to?: string   // ISO date (inclusive)
+}
