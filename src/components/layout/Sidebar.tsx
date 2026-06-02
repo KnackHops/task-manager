@@ -11,7 +11,6 @@ import {
   History,
   UserPlus,
   Star,
-  ListTodo,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -37,7 +36,7 @@ export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
         { to: `/p/${projectSlug}`, label: 'Board', icon: LayoutDashboard, exact: true },
         { to: `/p/${projectSlug}/sprints`, label: 'Sprints', icon: Timer },
         { to: `/p/${projectSlug}/gantt`, label: 'Gantt', icon: CalendarRange },
-        { to: `/p/${projectSlug}/logs`, label: 'Logs', icon: History },
+        { to: `/time-logs`, label: 'Time Logs', icon: History },
         { to: `/p/${projectSlug}/archive`, label: 'Archive', icon: Archive },
         { to: `/p/${projectSlug}/settings`, label: 'Settings', icon: Settings },
       ]
@@ -81,19 +80,6 @@ export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
               {!collapsed && <span>All Projects</span>}
             </Link>
 
-            {/* My Work link — visible in project context too */}
-            <Link
-              to="/my-work"
-              className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                currentPath === '/my-work'
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-              )}
-            >
-              <ListTodo className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>My Work</span>}
-            </Link>
 
             {/* Project nav items */}
             {projectNav.map((item) => {
@@ -123,16 +109,16 @@ export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
             {/* Nav links */}
             <div className="space-y-0.5">
               <Link
-                to="/my-work"
+                to="/time-logs"
                 className={cn(
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                  currentPath === '/my-work'
+                  currentPath === '/time-logs'
                     ? 'bg-primary/10 text-primary font-medium'
                     : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                 )}
               >
-                <ListTodo className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>My Work</span>}
+                <History className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>Time Logs</span>}
               </Link>
               <Link
                 to="/projects"

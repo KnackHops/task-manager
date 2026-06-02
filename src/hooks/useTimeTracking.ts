@@ -4,27 +4,48 @@ import {
   startTimer,
   stopTimer,
   getRunningSession,
-  fetchMyTasks,
+  getTaskTotal,
   getTotals,
+  getProjectTotals,
+  getProjectTaskSeconds,
   getSprintTotal,
   listSessions,
 } from '@/services/time-sessions'
-import { setTaskRank } from '@/services/user-task-order'
+import { setTaskRank, getTaskRanks } from '@/services/user-task-order'
 import type { SessionLogFilters } from '@/types/database'
 
 export const timeKeys = {
-  myTasks: (userId: string) => ['my-tasks', userId] as const,
   running: (userId: string) => ['running-session', userId] as const,
   totals: (userId: string) => ['time-totals', userId] as const,
+  projectTotals: (userId: string, projectId: string) => ['project-totals', userId, projectId] as const,
   sprintTotal: (userId: string, sprintId: string) => ['sprint-total', userId, sprintId] as const,
+  taskTotal: (userId: string, taskId: string) => ['task-total', userId, taskId] as const,
+  projectTaskSeconds: (userId: string, projectId: string) => ['project-task-seconds', userId, projectId] as const,
+  taskRanks: (userId: string, projectId: string) => ['task-ranks', userId, projectId] as const,
   log: (filters: SessionLogFilters) => ['session-log', filters] as const,
 }
 
-export function useMyTasks(userId: string | undefined) {
+export function useProjectTaskSeconds(userId: string | undefined, projectId: string | undefined) {
   return useQuery({
-    queryKey: timeKeys.myTasks(userId ?? ''),
-    queryFn: () => fetchMyTasks(userId!),
-    enabled: !!userId,
+    queryKey: timeKeys.projectTaskSeconds(userId ?? '', projectId ?? ''),
+    queryFn: () => getProjectTaskSeconds(userId!, projectId!),
+    enabled: !!userId && !!projectId,
+  })
+}
+
+export function useProjectTotals(userId: string | undefined, projectId: string | undefined) {
+  return useQuery({
+    queryKey: timeKeys.projectTotals(userId ?? '', projectId ?? ''),
+    queryFn: () => getProjectTotals(userId!, projectId!),
+    enabled: !!userId && !!projectId,
+  })
+}
+
+export function useTaskTotal(userId: string | undefined, taskId: string | undefined) {
+  return useQuery({
+    queryKey: timeKeys.taskTotal(userId ?? '', taskId ?? ''),
+    queryFn: () => getTaskTotal(userId!, taskId!),
+    enabled: !!userId && !!taskId,
   })
 }
 
@@ -60,13 +81,34 @@ export function useSessionLog(filters: SessionLogFilters) {
   })
 }
 
+export function useTaskRanks(userId: string | undefined, projectId: string | undefined, taskIds: string[]) {
+  return useQuery({
+    queryKey: [...timeKeys.taskRanks(userId ?? '', projectId ?? ''), taskIds.length],
+    queryFn: () => getTaskRanks(userId!, taskIds),
+    enabled: !!userId && !!projectId && taskIds.length > 0,
+  })
+}
+
+export function useSetTaskRank(userId: string | undefined, projectId: string | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ taskId, rank }: { taskId: string; rank: number }) =>
+      setTaskRank(userId!, taskId, rank),
+    onSuccess: () => {
+      if (userId && projectId) qc.invalidateQueries({ queryKey: timeKeys.taskRanks(userId, projectId) })
+    },
+  })
+}
+
 function useInvalidateTime(userId: string | undefined) {
   const qc = useQueryClient()
   return () => {
     if (!userId) return
     qc.invalidateQueries({ queryKey: timeKeys.running(userId) })
     qc.invalidateQueries({ queryKey: timeKeys.totals(userId) })
-    qc.invalidateQueries({ queryKey: timeKeys.myTasks(userId) })
+    qc.invalidateQueries({ queryKey: ['task-total'] })
+    qc.invalidateQueries({ queryKey: ['project-totals'] })
+    qc.invalidateQueries({ queryKey: ['project-task-seconds'] })
     qc.invalidateQueries({ queryKey: ['session-log'] })
     qc.invalidateQueries({ queryKey: ['sprint-total'] })
   }
@@ -85,17 +127,6 @@ export function useStopTimer(userId: string | undefined) {
   return useMutation({
     mutationFn: () => stopTimer(),
     onSuccess: invalidate,
-  })
-}
-
-export function useSetTaskRank(userId: string | undefined) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ taskId, rank }: { taskId: string; rank: number }) =>
-      setTaskRank(userId!, taskId, rank),
-    onSuccess: () => {
-      if (userId) qc.invalidateQueries({ queryKey: timeKeys.myTasks(userId) })
-    },
   })
 }
 

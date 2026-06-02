@@ -2,7 +2,6 @@ import { supabase } from '@/lib/supabase'
 import type {
   TimeSession,
   TimeSessionWithTask,
-  MyWorkTask,
   SessionLogFilters,
 } from '@/types/database'
 import { elapsedSeconds } from '@/lib/time-format'
@@ -42,69 +41,91 @@ export async function getRunningSession(
   return { ...row, duration_seconds: elapsedSeconds(row.started_at, row.ended_at) }
 }
 
-/** Tasks assigned to the user across all projects, with cumulative time + private rank. */
-export async function fetchMyTasks(userId: string): Promise<MyWorkTask[]> {
-  // Assigned, non-archived tasks across all projects.
-  const { data: assigned, error: aErr } = await supabase
-    .from('task_assignees')
-    .select(
-      `task:tasks!task_id(id, title, task_number, priority, is_done, sprint_id, archived,
-        project:projects!project_id(id, name, slug, prefix))`,
-    )
-    .eq('assignee_id', userId)
-  if (aErr) throw aErr
+export interface ProjectTimeTotals {
+  todaySeconds: number
+  weekSeconds: number
+}
 
-  const tasks = (assigned ?? [])
-    .map((r) => (r as Record<string, unknown>).task as Record<string, unknown> | null)
-    .filter((t): t is Record<string, unknown> => !!t && !t.archived)
+/** The user's today + this-week time on a single project (week starts Monday, local). */
+export async function getProjectTotals(
+  userId: string,
+  projectId: string,
+): Promise<ProjectTimeTotals> {
+  const { data: ptasks, error: ptErr } = await supabase
+    .from('tasks')
+    .select('id')
+    .eq('project_id', projectId)
+  if (ptErr) throw ptErr
+  const ids = (ptasks ?? []).map((t) => (t as { id: string }).id)
+  if (ids.length === 0) return { todaySeconds: 0, weekSeconds: 0 }
 
-  const taskIds = tasks.map((t) => t.id as string)
-  if (taskIds.length === 0) return []
+  const now = new Date()
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const daysSinceMonday = (now.getDay() + 6) % 7 // 0 = Monday
+  const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday)
 
-  // Per-task total seconds (sum of all the user's sessions on those tasks).
-  const { data: sessions, error: sErr } = await supabase
+  const { data, error } = await supabase
+    .from('task_time_sessions')
+    .select('started_at, ended_at')
+    .eq('user_id', userId)
+    .in('task_id', ids)
+    .gte('started_at', startOfWeek.toISOString())
+  if (error) throw error
+
+  const dayMs = startOfDay.getTime()
+  let todaySeconds = 0
+  let weekSeconds = 0
+  for (const s of data ?? []) {
+    const row = s as { started_at: string; ended_at: string | null }
+    const secs = elapsedSeconds(row.started_at, row.ended_at)
+    weekSeconds += secs
+    if (new Date(row.started_at).getTime() >= dayMs) todaySeconds += secs
+  }
+  return { todaySeconds, weekSeconds }
+}
+
+/** Map of taskId → seconds the user has logged, across all tasks in a project. */
+export async function getProjectTaskSeconds(
+  userId: string,
+  projectId: string,
+): Promise<Record<string, number>> {
+  const { data: ptasks, error: ptErr } = await supabase
+    .from('tasks')
+    .select('id')
+    .eq('project_id', projectId)
+  if (ptErr) throw ptErr
+  const ids = (ptasks ?? []).map((t) => (t as { id: string }).id)
+  if (ids.length === 0) return {}
+
+  const { data, error } = await supabase
     .from('task_time_sessions')
     .select('task_id, started_at, ended_at')
     .eq('user_id', userId)
-    .in('task_id', taskIds)
-  if (sErr) throw sErr
+    .in('task_id', ids)
+  if (error) throw error
 
-  const totals = new Map<string, number>()
-  for (const s of sessions ?? []) {
+  const map: Record<string, number> = {}
+  for (const s of data ?? []) {
     const row = s as { task_id: string; started_at: string; ended_at: string | null }
-    totals.set(row.task_id, (totals.get(row.task_id) ?? 0) + elapsedSeconds(row.started_at, row.ended_at))
+    map[row.task_id] = (map[row.task_id] ?? 0) + elapsedSeconds(row.started_at, row.ended_at)
   }
+  return map
+}
 
-  // Private ranks.
-  const { data: ranks, error: rErr } = await supabase
-    .from('user_task_order')
-    .select('task_id, rank')
+/** Total seconds the user has logged on a single task (all their sessions on it). */
+export async function getTaskTotal(userId: string, taskId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('task_time_sessions')
+    .select('started_at, ended_at')
     .eq('user_id', userId)
-    .in('task_id', taskIds)
-  if (rErr) throw rErr
-  const rankMap = new Map<string, number>()
-  for (const r of ranks ?? []) rankMap.set((r as { task_id: string }).task_id, (r as { rank: number }).rank)
-
-  const result: MyWorkTask[] = tasks.map((t) => ({
-    id: t.id as string,
-    title: t.title as string,
-    task_number: t.task_number as number,
-    priority: t.priority as MyWorkTask['priority'],
-    is_done: t.is_done as boolean,
-    sprint_id: (t.sprint_id as string | null) ?? null,
-    project: t.project as MyWorkTask['project'],
-    total_seconds: totals.get(t.id as string) ?? 0,
-    rank: rankMap.get(t.id as string) ?? null,
-  }))
-
-  // Ranked first (ascending rank), then unranked by task_number.
-  result.sort((a, b) => {
-    if (a.rank != null && b.rank != null) return a.rank - b.rank
-    if (a.rank != null) return -1
-    if (b.rank != null) return 1
-    return a.task_number - b.task_number
-  })
-  return result
+    .eq('task_id', taskId)
+  if (error) throw error
+  let total = 0
+  for (const s of data ?? []) {
+    const row = s as { started_at: string; ended_at: string | null }
+    total += elapsedSeconds(row.started_at, row.ended_at)
+  }
+  return total
 }
 
 /** Sum of the user's session seconds within [from, to) (ISO timestamps). */

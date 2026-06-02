@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { PriorityBadge, TagBadge } from '@/components/ui/Badge'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import { Avatar } from '@/components/ui/Avatar'
+import { TaskTimerButton } from '@/components/task/TaskTimerButton'
 import { useUpdateTask } from '@/hooks/useTasks'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import type { TaskWithRelations } from '@/types/database'
@@ -52,11 +53,16 @@ export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
   const changeColumn = (columnId: string) => {
     if (columnId === task.column_id) return
     const toDone = doneColumnIds.includes(columnId)
+    const fromDone = doneColumnIds.includes(task.column_id)
     updateTask.mutate({
       taskId: task.id,
       input: {
         column_id: columnId,
-        ...(toDone ? { is_done: true, done_at: new Date().toISOString() } : {}),
+        ...(toDone
+          ? { is_done: true, done_at: new Date().toISOString() }
+          : fromDone
+            ? { is_done: false, done_at: null }
+            : {}),
       },
     })
   }
@@ -255,6 +261,8 @@ export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
               {columns.find((c) => c.id === task.column_id)?.name}
             </span>
           )}
+
+          <TaskTimerButton taskId={task.id} className="shrink-0" />
         </div>
       )}
     </Draggable>
