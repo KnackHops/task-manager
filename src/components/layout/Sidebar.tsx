@@ -81,6 +81,20 @@ export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
               {!collapsed && <span>All Projects</span>}
             </Link>
 
+            {/* My Work link — visible in project context too */}
+            <Link
+              to="/my-work"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                currentPath === '/my-work'
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+              )}
+            >
+              <ListTodo className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>My Work</span>}
+            </Link>
+
             {/* Project nav items */}
             {projectNav.map((item) => {
               const isActive = item.exact

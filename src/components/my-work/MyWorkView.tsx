@@ -36,8 +36,13 @@ export function MyWorkView() {
 
   function onDragEnd(result: DropResult) {
     if (!result.destination || !userId) return
+    const fromIndex = result.source.index
     const toIndex = result.destination.index
-    const ranks = active.map((t) => t.rank)
+    if (fromIndex === toIndex) return
+    const reordered = Array.from(active)
+    const [moved] = reordered.splice(fromIndex, 1) as [MyWorkTask]
+    reordered.splice(toIndex, 0, moved)
+    const ranks = reordered.map((t) => t.rank)
     const rank = midpointRank(ranks, toIndex)
     setRank.mutate({ taskId: result.draggableId, rank })
   }

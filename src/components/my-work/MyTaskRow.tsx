@@ -1,4 +1,5 @@
 import { Play, Square, GripVertical } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import type { MyWorkTask } from '@/types/database'
 import { formatDuration } from '@/lib/time-format'
 import { cn } from '@/lib/utils'
@@ -39,9 +40,14 @@ export function MyTaskRow({
         title="Mark complete"
       />
 
-      <span className={cn('min-w-0 flex-1 truncate text-sm text-foreground', task.is_done && 'line-through text-muted-foreground')}>
+      <Link
+        to="/p/$slug"
+        params={{ slug: task.project.slug }}
+        search={{ task: task.id, sprint: undefined }}
+        className={cn('min-w-0 flex-1 truncate text-sm text-foreground hover:text-primary hover:underline', task.is_done && 'line-through text-muted-foreground')}
+      >
         {task.title}
-      </span>
+      </Link>
 
       <span className="shrink-0 rounded bg-accent px-1.5 py-0.5 text-[11px] text-muted-foreground">
         {task.project.prefix}-{task.task_number}

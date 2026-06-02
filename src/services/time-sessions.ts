@@ -167,6 +167,17 @@ export async function getSprintTotal(userId: string, sprintId: string): Promise<
 
 /** Chronological session log. Project-scoped (team feed) or user-scoped (own log). */
 export async function listSessions(filters: SessionLogFilters): Promise<TimeSessionWithTask[]> {
+  let projectTaskIds: string[] | undefined
+  if (filters.projectId) {
+    const { data: projTasks, error: ptErr } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('project_id', filters.projectId)
+    if (ptErr) throw ptErr
+    projectTaskIds = (projTasks ?? []).map((t) => (t as { id: string }).id)
+    if (projectTaskIds.length === 0) return []
+  }
+
   let q = supabase
     .from('task_time_sessions')
     .select(
@@ -181,15 +192,12 @@ export async function listSessions(filters: SessionLogFilters): Promise<TimeSess
   if (filters.userId) q = q.eq('user_id', filters.userId)
   if (filters.from) q = q.gte('started_at', filters.from)
   if (filters.to) q = q.lte('started_at', filters.to)
+  if (projectTaskIds) q = q.in('task_id', projectTaskIds)
 
   const { data, error } = await q
   if (error) throw error
-  let rows = (data ?? []).map((r) => {
+  return (data ?? []).map((r) => {
     const row = r as unknown as TimeSessionWithTask
     return { ...row, duration_seconds: elapsedSeconds(row.started_at, row.ended_at) }
   })
-  // Project filter: applied client-side via the joined task.project (RLS already limits
-  // visibility to the caller's projects).
-  if (filters.projectId) rows = rows.filter((r) => r.task?.project.id === filters.projectId)
-  return rows
 }
