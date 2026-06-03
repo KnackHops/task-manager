@@ -60,5 +60,6 @@ export function DialogHeader({ children }: { children: ReactNode }) {
 }
 
 export function DialogTitle({ children }: { children: ReactNode }) {
-  return <h2 className="text-lg font-semibold text-foreground">{children}</h2>
+  // min-w-0 so the title can shrink (and its child truncate) inside a flex header.
+  return <h2 className="min-w-0 text-lg font-semibold text-foreground">{children}</h2>
 }
