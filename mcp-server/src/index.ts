@@ -6,6 +6,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js'
 import { authenticateApiKey, type RequestContext } from './auth.js'
+import { registerWhoami } from './tools/whoami.js'
 import { registerListProjects } from './tools/list-projects.js'
 import { registerListTasks } from './tools/list-tasks.js'
 import { registerListTags } from './tools/list-tags.js'
@@ -35,6 +36,7 @@ function createServer(ctx: RequestContext): McpServer {
     version: '1.0.0',
   })
 
+  registerWhoami(server, ctx)
   registerListProjects(server, ctx)
   registerListTasks(server, ctx)
   registerListTags(server, ctx)
