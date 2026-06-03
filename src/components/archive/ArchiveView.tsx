@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { ArchiveRestore, ChevronDown, Loader2, Search, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { formatTaskRef } from "@/lib/utils";
 import { useArchivedTasks, useUnarchiveTask } from "@/hooks/useTasks";
 import { useSprints } from "@/hooks/useSprints";
 import { useProjectContext } from "@/contexts/ProjectContext";
@@ -220,11 +221,9 @@ export function ArchiveView({ projectId }: ArchiveViewProps) {
             <div key={task.id} className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-4 py-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  {project.prefix && (
-                    <span className="text-[10px] font-medium text-muted-foreground font-mono shrink-0">
-                      {project.prefix}-{task.task_number}
-                    </span>
-                  )}
+                  <span className="text-[10px] font-medium text-muted-foreground font-mono shrink-0">
+                    {formatTaskRef(project.prefix, task.task_number)}
+                  </span>
                   <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
                 </div>
                 <div className="flex items-center gap-2 mt-1">

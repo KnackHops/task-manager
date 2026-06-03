@@ -17,7 +17,7 @@ import { formatDuration } from '@/lib/time-format'
 import { PriorityDot, TagBadge } from '@/components/ui/Badge'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import { TaskTimerButton } from '@/components/task/TaskTimerButton'
-import { cn } from '@/lib/utils'
+import { cn, formatTaskRef } from '@/lib/utils'
 import type { TaskWithRelations } from '@/types/database'
 
 interface MyTasksViewProps {
@@ -183,7 +183,7 @@ function MyTaskRow({
         <PriorityDot priority={task.priority} />
       )}
 
-      <TaskNumberPill taskId={`${projectPrefix}-${task.task_number}`} />
+      <TaskNumberPill taskId={formatTaskRef(projectPrefix, task.task_number)} />
 
       <span className="min-w-0 flex-1 truncate text-foreground">{task.title}</span>
 

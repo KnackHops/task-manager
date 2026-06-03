@@ -1,6 +1,6 @@
 import { Draggable } from '@hello-pangea/dnd'
 import { GitMerge, MessageSquare, Paperclip, Zap } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatTaskRef } from '@/lib/utils'
 import { TagBadge } from '@/components/ui/Badge'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import { Avatar } from '@/components/ui/Avatar'
@@ -25,7 +25,7 @@ interface TaskCardProps {
 export function TaskCard({ task, index, onClick }: TaskCardProps) {
   const { project } = useProjectContext()
   const { data: sprints } = useSprints(project.id)
-  const taskId = project.prefix ? `${project.prefix}-${task.task_number}` : null
+  const taskId = formatTaskRef(project.prefix, task.task_number)
   const sprintName = task.sprint_id
     ? sprints?.find((s) => s.id === task.sprint_id)?.name
     : null
@@ -67,7 +67,7 @@ export function TaskCard({ task, index, onClick }: TaskCardProps) {
             <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
               <GitMerge className={cn('h-3 w-3 shrink-0', task.dependencies.every((d) => d.is_done) && 'text-emerald-500')} />
               {task.dependencies.map((d) => (
-                <span key={d.id} className={cn(d.is_done && 'text-emerald-500')}>{project.prefix}-{d.task_number}</span>
+                <span key={d.id} className={cn(d.is_done && 'text-emerald-500')}>{formatTaskRef(project.prefix, d.task_number)}</span>
               ))}
             </div>
           )}
