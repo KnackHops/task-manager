@@ -538,7 +538,7 @@ export function TaskDetailPanel({
         </div>
       </DialogHeader>
 
-      <div ref={scrollWrapperRef} className="overflow-y-auto flex-1 min-h-0">
+      <div ref={scrollWrapperRef} className="overflow-y-auto overflow-x-hidden flex-1 min-h-0">
       <div className="space-y-4">
         {/* Description */}
         <div>
@@ -695,7 +695,7 @@ export function TaskDetailPanel({
                     id="detail-sprint"
                     value={task.sprint_id ?? ''}
                     onChange={(e) => handleFieldUpdate('sprint_id', e.target.value || null)}
-                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
+                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset appearance-none"
                   >
                     <option value="">No Sprint</option>
                     {sprints
@@ -723,7 +723,7 @@ export function TaskDetailPanel({
                       handleFieldUpdate('story_points', val ? Number(val) : null)
                     }}
                     placeholder="—"
-                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset"
                   />
                 </div>
 
@@ -739,7 +739,7 @@ export function TaskDetailPanel({
                       value={task.start_date ?? ''}
                       max={task.due_date ?? undefined}
                       onChange={(e) => handleFieldUpdate('start_date', e.target.value || null)}
-                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-default [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset disabled:opacity-50 disabled:cursor-default [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                     />
                     <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
                   </div>
@@ -757,7 +757,7 @@ export function TaskDetailPanel({
                       value={task.due_date ?? ''}
                       min={task.start_date ?? undefined}
                       onChange={(e) => handleFieldUpdate('due_date', e.target.value || null)}
-                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-default [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset disabled:opacity-50 disabled:cursor-default [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                     />
                     <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
                   </div>

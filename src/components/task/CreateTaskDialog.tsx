@@ -295,7 +295,7 @@ export function CreateTaskDialog({
         <DialogTitle>New Task</DialogTitle>
       </DialogHeader>
 
-      <div className="overflow-y-auto flex-1 min-h-0">
+      <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <label
@@ -432,7 +432,7 @@ export function CreateTaskDialog({
               id="sprint"
               value={sprintId}
               onChange={(e) => setSprintId(e.target.value)}
-              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
+              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset appearance-none"
             >
               <option value="">No Sprint</option>
               {sprints
@@ -473,7 +473,7 @@ export function CreateTaskDialog({
                 value={startDate}
                 max={dueDate || undefined}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               />
               <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
             </div>
@@ -489,7 +489,7 @@ export function CreateTaskDialog({
                 value={dueDate}
                 min={startDate || undefined}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               />
               <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
             </div>
