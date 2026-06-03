@@ -65,13 +65,18 @@ export function CreateTaskDialog({
     [sprints]
   )
 
+  const isDefaultSprintActive = defaultSprintId && activeSprint?.id === defaultSprintId
   const firstColumnId =
-    defaultColumnId ?? project.default_column_id ?? columns[0]?.id ?? ''
+    defaultColumnId
+    ?? (isDefaultSprintActive && project.sprint_column_id ? project.sprint_column_id : null)
+    ?? project.default_column_id
+    ?? columns[0]?.id
+    ?? ''
 
   const [title, setTitle] = useState('')
   const [columnId, setColumnId] = useState(firstColumnId)
   const [priority, setPriority] = useState<TaskPriority>('medium')
-  const [sprintId, setSprintId] = useState<string>(defaultSprintId ?? activeSprint?.id ?? '')
+  const [sprintId, setSprintId] = useState<string>(defaultSprintId ?? '')
   const [storyPoints, setStoryPoints] = useState('')
   const [startDate, setStartDate] = useState('')
   const [dueDate, setDueDate] = useState('')
