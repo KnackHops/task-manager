@@ -7,11 +7,13 @@ import { TagSelect } from '@/components/ui/TagSelect'
 import { AssigneeSelect } from '@/components/ui/AssigneeSelect'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProjectContext } from '@/contexts/ProjectContext'
-import { useCreateTask, useUpdateTask } from '@/hooks/useTasks'
+import { useCreateTask, useUpdateTask, useTasks } from '@/hooks/useTasks'
 import { useUploadAttachment, attachmentKeys } from '@/hooks/useAttachments'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSprints } from '@/hooks/useSprints'
 import { useMembers } from '@/hooks/useMembers'
+import { DependencySelect } from '@/components/ui/DependencySelect'
+import { setTaskDependencies } from '@/services/dependencies'
 import {
   INLINE_IMG_ATTR,
   extractRawBody,
@@ -59,6 +61,7 @@ export function CreateTaskDialog({
   const uploadAttachment = useUploadAttachment()
   const { data: members } = useMembers(projectId)
   const { data: sprints } = useSprints(projectId)
+  const { data: allProjectTasks } = useTasks(projectId)
 
   const activeSprint = useMemo(
     () => sprints?.find((s) => s.status === 'active'),
@@ -82,6 +85,7 @@ export function CreateTaskDialog({
   const [dueDate, setDueDate] = useState('')
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
+  const [dependencyIds, setDependencyIds] = useState<string[]>([])
   const [descEmpty, setDescEmpty] = useState(true)
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -280,6 +284,15 @@ export function CreateTaskDialog({
         }
       }
 
+      // Set dependencies after task creation
+      if (dependencyIds.length > 0) {
+        try {
+          await setTaskDependencies(task.id, dependencyIds)
+        } catch (err) {
+          toast.error(`Failed to set dependencies: ${err instanceof Error ? err.message : 'Unknown error'}`)
+        }
+      }
+
       toast.success('Task created')
       onClose()
     } catch (err) {
@@ -426,9 +439,7 @@ export function CreateTaskDialog({
             value={priority}
             onChange={(e) => setPriority(e.target.value as TaskPriority)}
           />
-        </div>
 
-        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <label htmlFor="sprint" className="text-sm font-medium text-foreground">
               Sprint
@@ -464,9 +475,7 @@ export function CreateTaskDialog({
               className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset"
             />
           </div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <label htmlFor="start-date" className="text-sm font-medium text-foreground">
               Start Date
@@ -499,15 +508,28 @@ export function CreateTaskDialog({
               <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
             </div>
           </div>
-        </div>
 
-        <AssigneeSelect
-          members={members ?? []}
-          selectedIds={assigneeIds}
-          onChange={setAssigneeIds}
-          label="Assignees"
-          position="top"
-        />
+          <div className="col-span-2">
+            <AssigneeSelect
+              members={members ?? []}
+              selectedIds={assigneeIds}
+              onChange={setAssigneeIds}
+              label="Assignees"
+              position="top"
+            />
+          </div>
+
+          <div className="col-span-2">
+            <DependencySelect
+              tasks={allProjectTasks ?? []}
+              currentTaskId=""
+              selectedIds={dependencyIds}
+              onChange={(ids) => setDependencyIds(ids)}
+              label="Dependencies"
+              prefix={project.prefix}
+            />
+          </div>
+        </div>
 
         <div className="flex justify-end gap-2 pt-2">
           <button
