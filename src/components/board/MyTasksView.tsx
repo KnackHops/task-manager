@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { flushSync } from 'react-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import { GripVertical, Calendar, Zap, MessageSquare, Paperclip } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -11,12 +13,14 @@ import {
   useRunningSession,
   useTaskRanks,
   useSetTaskRank,
+  timeKeys,
 } from '@/hooks/useTimeTracking'
 import { midpointRank } from '@/services/user-task-order'
 import { formatDuration } from '@/lib/time-format'
 import { PriorityDot, TagBadge } from '@/components/ui/Badge'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import { TaskTimerButton } from '@/components/task/TaskTimerButton'
+import { TaskTimeDisplay } from '@/components/task/TaskTimeDisplay'
 import { cn, formatTaskRef } from '@/lib/utils'
 import type { TaskWithRelations } from '@/types/database'
 
@@ -34,6 +38,7 @@ function fmtDue(iso: string) {
 export function MyTasksView({ projectId, projectPrefix, activeSprint, onTaskClick }: MyTasksViewProps) {
   const { user } = useAuth()
   const userId = user?.id
+  const queryClient = useQueryClient()
 
   const { data: allTasks, isLoading } = useTasks(projectId)
   const { data: secondsMap } = useProjectTaskSeconds(userId, projectId)
@@ -81,7 +86,28 @@ export function MyTasksView({ projectId, projectPrefix, activeSprint, onTaskClic
     const [moved] = reordered.splice(from, 1) as [TaskWithRelations]
     reordered.splice(to, 0, moved)
     const rankArr = reordered.map((t) => (ranks ?? {})[t.id] ?? null)
-    setRank.mutate({ taskId: result.draggableId, rank: midpointRank(rankArr, to) })
+    const newRank = midpointRank(rankArr, to)
+
+    // Cancel any in-flight ranks refetch so it can't resolve after the move and
+    // clobber it with the old order.
+    if (userId) queryClient.cancelQueries({ queryKey: timeKeys.taskRanks(userId, projectId) })
+
+    // Commit the new rank to the cache synchronously (flushSync) so `ordered`
+    // re-sorts and the row holds its new position BEFORE @hello-pangea/dnd reads
+    // the DOM for its drop animation. Without this the row snaps back to its old
+    // spot and only jumps forward after the mutation's refetch — the flicker.
+    // Patching just the dragged task mirrors exactly what the server persists,
+    // so the optimistic order matches the eventual refetch.
+    if (userId) {
+      flushSync(() => {
+        queryClient.setQueriesData<Record<string, number>>(
+          { queryKey: timeKeys.taskRanks(userId, projectId) },
+          (old) => ({ ...(old ?? {}), [result.draggableId]: newRank }),
+        )
+      })
+    }
+
+    setRank.mutate({ taskId: result.draggableId, rank: newRank })
   }
 
   return (
@@ -244,10 +270,10 @@ function MyTaskRow({
         )}
       </div>
 
-      {/* Time tracked (fixed slot) */}
-      <span className="w-[52px] shrink-0 text-right font-mono text-xs font-medium tabular-nums text-muted-foreground">
-        {formatDuration(seconds)}
-      </span>
+      {/* Time tracked (fixed slot) — live HH:MM:SS clock while running */}
+      <div className="flex w-[68px] shrink-0 justify-end text-xs font-medium">
+        <TaskTimeDisplay taskId={task.id} baseSeconds={seconds} />
+      </div>
 
       <TaskTimerButton taskId={task.id} className="shrink-0" />
     </div>

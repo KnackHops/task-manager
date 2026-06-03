@@ -94,7 +94,9 @@ export function useSetTaskRank(userId: string | undefined, projectId: string | u
   return useMutation({
     mutationFn: ({ taskId, rank }: { taskId: string; rank: number }) =>
       setTaskRank(userId!, taskId, rank),
-    onSuccess: () => {
+    // The caller patches the rank cache optimistically (flushSync) before this
+    // runs; invalidate on settle so the order re-syncs on both success and error.
+    onSettled: () => {
       if (userId && projectId) qc.invalidateQueries({ queryKey: timeKeys.taskRanks(userId, projectId) })
     },
   })

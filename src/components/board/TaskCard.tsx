@@ -5,6 +5,7 @@ import { TagBadge } from '@/components/ui/Badge'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import { Avatar } from '@/components/ui/Avatar'
 import { TaskTimerButton } from '@/components/task/TaskTimerButton'
+import { TaskTimeDisplay } from '@/components/task/TaskTimeDisplay'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import { useSprints } from '@/hooks/useSprints'
 import type { TaskWithRelations } from '@/types/database'
@@ -56,7 +57,10 @@ export function TaskCard({ task, index, onClick }: TaskCardProps) {
                 {task.story_points}
               </span>
             )}
-            <TaskTimerButton taskId={task.id} className="ml-auto" />
+            <div className="ml-auto flex items-center gap-1">
+              <TaskTimeDisplay taskId={task.id} className="text-[10px]" />
+              <TaskTimerButton taskId={task.id} />
+            </div>
           </div>
 
           <p className="mt-1.5 text-sm font-medium text-card-foreground line-clamp-2">

@@ -6,6 +6,8 @@ import { TaskListRow } from './TaskListRow'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useBoardDnd } from '@/hooks/useBoardDnd'
 import { useProjectContext } from '@/contexts/ProjectContext'
+import { useAuth } from '@/contexts/AuthContext'
+import { useProjectTaskSeconds } from '@/hooks/useTimeTracking'
 
 interface BoardListViewProps {
   projectId: string
@@ -32,6 +34,8 @@ export function BoardListView({
   onTaskClick,
 }: BoardListViewProps) {
   const { columns } = useProjectContext()
+  const { user } = useAuth()
+  const { data: secondsMap } = useProjectTaskSeconds(user?.id, projectId)
   const { grouped, handleDragEnd, isLoading } = useBoardDnd(projectId, sprintId)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
     loadCollapsed(projectId)
@@ -104,6 +108,7 @@ export function BoardListView({
                           key={task.id}
                           task={task}
                           index={index}
+                          seconds={secondsMap?.[task.id] ?? 0}
                           onClick={onTaskClick}
                         />
                       ))}
