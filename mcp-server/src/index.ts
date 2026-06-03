@@ -8,6 +8,7 @@ import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js
 import { authenticateApiKey, type RequestContext } from './auth.js'
 import { registerListProjects } from './tools/list-projects.js'
 import { registerListTasks } from './tools/list-tasks.js'
+import { registerListTags } from './tools/list-tags.js'
 import { registerGetTask } from './tools/get-task.js'
 import { registerSearchTasks } from './tools/search-tasks.js'
 import { registerGetAttachmentUrl } from './tools/get-attachment-url.js'
@@ -36,6 +37,7 @@ function createServer(ctx: RequestContext): McpServer {
 
   registerListProjects(server, ctx)
   registerListTasks(server, ctx)
+  registerListTags(server, ctx)
   registerGetTask(server, ctx)
   registerSearchTasks(server, ctx)
   registerGetAttachmentUrl(server, ctx)

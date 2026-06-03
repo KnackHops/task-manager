@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { X, ChevronDown, CheckCircle, Search } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatTaskRef } from '@/lib/utils'
 import type { TaskWithRelations, TaskDependency } from '@/types/database'
 
 interface DependencySelectProps {
@@ -98,8 +98,7 @@ export function DependencySelect({
     onChange(next, deps)
   }
 
-  const taskLabel = (t: TaskWithRelations) =>
-    prefix ? `${prefix}-${t.task_number}` : `#${t.task_number}`
+  const taskLabel = (t: TaskWithRelations) => formatTaskRef(prefix, t.task_number)
 
   return (
     <div ref={ref} className="relative">

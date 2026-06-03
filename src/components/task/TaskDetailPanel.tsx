@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Calendar, Trash2, Archive, ArchiveRestore, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { formatTaskRef } from '@/lib/utils'
 import { Dialog, DialogHeader, DialogTitle } from '@/components/ui/Dialog'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -440,9 +441,7 @@ export function TaskDetailPanel({
       <DialogHeader>
         <div className="flex items-center justify-between gap-3 pr-10">
           <div className="flex min-w-0 items-center gap-2">
-            {project.prefix && (
-              <TaskNumberPill taskId={`${project.prefix}-${task.task_number}`} />
-            )}
+            <TaskNumberPill taskId={formatTaskRef(project.prefix, task.task_number)} />
             {isEditingTitle ? (
               <input
                 value={title}
@@ -846,7 +845,7 @@ export function TaskDetailPanel({
               {unfinishedDeps.map((d) => (
                 <li key={d.id} className="flex items-center gap-1.5">
                   <span className="font-mono text-xs text-primary">
-                    {project.prefix}-{d.task_number}
+                    {formatTaskRef(project.prefix, d.task_number)}
                   </span>
                   <span className="truncate">{d.title}</span>
                 </li>

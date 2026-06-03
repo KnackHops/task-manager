@@ -13,7 +13,7 @@ import {
   min as minDate,
 } from 'date-fns'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatTaskRef } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import { GanttBar } from './GanttBar'
@@ -372,9 +372,7 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
                   {/* Task rows */}
                   {!isCollapsed &&
                     rows.map((task) => {
-                      const taskId = project.prefix
-                        ? `${project.prefix}-${task.task_number}`
-                        : null
+                      const taskId = formatTaskRef(project.prefix, task.task_number)
                       return (
                         <div key={task.id} className="flex border-b border-border/40">
                           <div
@@ -418,9 +416,7 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
           </h3>
           <div className="flex flex-wrap gap-2">
             {unscheduled.map((task) => {
-              const taskId = project.prefix
-                ? `${project.prefix}-${task.task_number}`
-                : null
+              const taskId = formatTaskRef(project.prefix, task.task_number)
               return (
                 <button
                   key={task.id}
@@ -463,11 +459,9 @@ export function GanttView({ projectId, onTaskClick }: GanttViewProps) {
             className="pointer-events-none fixed z-50 flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-xs text-card-foreground opacity-70 shadow-lg"
             style={{ left: dragGhost.x + 8, top: dragGhost.y - 14 }}
           >
-            {project.prefix && (
-              <span className="font-mono text-[10px] text-primary">
-                {project.prefix}-{dragGhost.task.task_number}
-              </span>
-            )}
+            <span className="font-mono text-[10px] text-primary">
+              {formatTaskRef(project.prefix, dragGhost.task.task_number)}
+            </span>
             <span className="max-w-[200px] truncate">{dragGhost.task.title}</span>
           </div>,
           document.body,
