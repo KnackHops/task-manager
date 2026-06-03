@@ -378,17 +378,77 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
   return (
     <Dialog open onClose={onClose} className="max-w-[calc(100vw-2rem)] sm:max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
       <DialogHeader>
-        <div className="flex min-w-0 items-center gap-2 pr-10">
-          <TaskNumberPill taskId={formatTaskRef(project.prefix, task.task_number)} />
-          {isEditingTitle ? (
-            <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={handleTitleBlur} onKeyDown={(e) => e.key === "Enter" && handleTitleBlur()} autoFocus className="flex-1 bg-transparent text-lg font-semibold text-foreground outline-none border-b border-primary" />
-          ) : (
-            <DialogTitle>
-              <span onClick={() => canEditTask && setIsEditingTitle(true)} className={`block truncate ${canEditTask ? "hover:text-primary transition-colors cursor-pointer" : ""}`}>
-                {task.title}
+        <div className="flex items-center justify-between gap-3 pr-10">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <TaskNumberPill taskId={formatTaskRef(project.prefix, task.task_number)} />
+            {isEditingTitle ? (
+              <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={handleTitleBlur} onKeyDown={(e) => e.key === "Enter" && handleTitleBlur()} autoFocus className="flex-1 bg-transparent text-lg font-semibold text-foreground outline-none border-b border-primary" />
+            ) : (
+              <DialogTitle>
+                <span onClick={() => canEditTask && setIsEditingTitle(true)} className={`block truncate ${canEditTask ? "hover:text-primary transition-colors cursor-pointer" : ""}`}>
+                  {task.title}
+                </span>
+              </DialogTitle>
+            )}
+          </div>
+
+          {/* Action buttons — inline with the title */}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            <TaskTimerButton taskId={taskId} variant="labeled" />
+            {(taskTotalSeconds ?? 0) > 0 && (
+              <span className="text-xs tabular-nums text-muted-foreground" title="Your time on this task">
+                {formatDuration(taskTotalSeconds ?? 0)}
               </span>
-            </DialogTitle>
-          )}
+            )}
+            {canEditTask && (
+              <button
+                onClick={() => {
+                  if (!task.is_done && unfinishedDeps.length > 0) {
+                    setShowDepsConfirm(true);
+                    return;
+                  }
+                  updateTask.mutate(
+                    {
+                      taskId,
+                      input: {
+                        is_done: !task.is_done,
+                        done_at: !task.is_done ? new Date().toISOString() : null,
+                      },
+                    },
+                    { onError: (err) => toast.error(err.message) },
+                  );
+                }}
+                title={task.is_done ? "Completed" : "Mark as Done"}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${task.is_done ? "border-emerald-500/30 text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20" : "border-border text-muted-foreground hover:bg-muted"} disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <CheckCircle className="h-3.5 w-3.5" />
+                <span>{task.is_done ? "Completed" : "Mark as Done"}</span>
+              </button>
+            )}
+
+            {canArchiveTask && (
+              <button onClick={task.archived ? handleUnarchive : handleArchive} title={task.archived ? "Unarchive" : "Archive"} className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors">
+                {task.archived ? (
+                  <>
+                    <ArchiveRestore className="h-3.5 w-3.5" />
+                    <span>Unarchive</span>
+                  </>
+                ) : (
+                  <>
+                    <Archive className="h-3.5 w-3.5" />
+                    <span>Archive</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {canDeleteTask && (
+              <button onClick={() => setShowDeleteConfirm(true)} title="Delete Task" className="flex items-center gap-1.5 rounded-lg border border-destructive/30 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors">
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete</span>
+              </button>
+            )}
+          </div>
         </div>
       </DialogHeader>
 
@@ -441,67 +501,6 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
             <div className="mt-1">
               <AttachmentList taskId={taskId} />
             </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-1.5 border-t border-border pt-3">
-            <TaskTimerButton taskId={taskId} variant="labeled" />
-            {(taskTotalSeconds ?? 0) > 0 && (
-              <span className="text-xs tabular-nums text-muted-foreground" title="Your time on this task">
-                {formatDuration(taskTotalSeconds ?? 0)}
-              </span>
-            )}
-            {canEditTask &&
-              (() => {
-                return (
-                  <button
-                    onClick={() => {
-                      if (!task.is_done && unfinishedDeps.length > 0) {
-                        setShowDepsConfirm(true);
-                        return;
-                      }
-                      updateTask.mutate(
-                        {
-                          taskId,
-                          input: {
-                            is_done: !task.is_done,
-                            done_at: !task.is_done ? new Date().toISOString() : null,
-                          },
-                        },
-                        { onError: (err) => toast.error(err.message) },
-                      );
-                    }}
-                    title={task.is_done ? "Completed" : "Mark as Done"}
-                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${task.is_done ? "border-emerald-500/30 text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20" : "border-border text-muted-foreground hover:bg-muted"} disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    <CheckCircle className="h-3.5 w-3.5" />
-                    <span>{task.is_done ? "Completed" : "Mark as Done"}</span>
-                  </button>
-                );
-              })()}
-
-            {canArchiveTask && (
-              <button onClick={task.archived ? handleUnarchive : handleArchive} title={task.archived ? "Unarchive" : "Archive"} className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors">
-                {task.archived ? (
-                  <>
-                    <ArchiveRestore className="h-3.5 w-3.5" />
-                    <span>Unarchive</span>
-                  </>
-                ) : (
-                  <>
-                    <Archive className="h-3.5 w-3.5" />
-                    <span>Archive</span>
-                  </>
-                )}
-              </button>
-            )}
-
-            {canDeleteTask && (
-              <button onClick={() => setShowDeleteConfirm(true)} title="Delete Task" className="flex items-center gap-1.5 rounded-lg border border-destructive/30 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors">
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>Delete</span>
-              </button>
-            )}
           </div>
 
           {/* Meta info */}
