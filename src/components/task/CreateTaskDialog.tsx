@@ -1,5 +1,11 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
-import { Calendar, Paperclip, X } from 'lucide-react'
+import { useState, useRef, useMemo } from 'react'
+import { Calendar, GripVertical, Paperclip, X } from 'lucide-react'
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  type DropResult,
+} from '@hello-pangea/dnd'
 import { toast } from 'sonner'
 import { Dialog, DialogHeader, DialogTitle } from '@/components/ui/Dialog'
 import { Select } from '@/components/ui/Select'
@@ -7,30 +13,20 @@ import { TagSelect } from '@/components/ui/TagSelect'
 import { AssigneeSelect } from '@/components/ui/AssigneeSelect'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProjectContext } from '@/contexts/ProjectContext'
-import { useCreateTask, useUpdateTask, useTasks } from '@/hooks/useTasks'
+import { useCreateTask, useUpdateTask, useTasks, taskKeys } from '@/hooks/useTasks'
 import { useUploadAttachment, attachmentKeys } from '@/hooks/useAttachments'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSprints } from '@/hooks/useSprints'
 import { useMembers } from '@/hooks/useMembers'
 import { DependencySelect } from '@/components/ui/DependencySelect'
 import { setTaskDependencies } from '@/services/dependencies'
+import { createChecklistItem } from '@/services/checklists'
+import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import {
-  INLINE_IMG_ATTR,
-  extractRawBody,
-  handleAttachmentDrop,
-  insertPastedImage,
-  insertFileLinkAtCursor,
-  placeCaretAtDropPoint,
-  handleEditorBackspace,
-  type AttachmentDropData,
-} from '@/lib/rich-editor'
-import { copyAttachment } from '@/services/attachments'
-import {
-  extractClipboardFiles,
-  isImageType,
   FILE_SIZE_LIMIT,
   formatFileSize,
 } from '@/lib/file-utils'
+import { replaceInlineTempId, removeInlineTempId } from '@/lib/rich-editor'
 import type { TaskPriority } from '@/types/database'
 
 interface CreateTaskDialogProps {
@@ -86,92 +82,25 @@ export function CreateTaskDialog({
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [dependencyIds, setDependencyIds] = useState<string[]>([])
-  const [descEmpty, setDescEmpty] = useState(true)
+  const [descRaw, setDescRaw] = useState('')
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
+  const [checklistItems, setChecklistItems] = useState<string[]>([])
+  const [newChecklistTitle, setNewChecklistTitle] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const descEditorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inlineImagesRef = useRef<Map<string, File>>(new Map())
-  const inlineFilesRef = useRef<Map<string, File>>(new Map())
-  const droppedExistingRef = useRef<Map<string, AttachmentDropData>>(new Map())
 
-  const checkDescEmpty = useCallback(() => {
-    if (!descEditorRef.current) return
-    const text = descEditorRef.current.textContent ?? ''
-    const hasImages = descEditorRef.current.querySelector(`img[${INLINE_IMG_ATTR}]`) !== null
-    setDescEmpty(text.trim().length === 0 && !hasImages)
-  }, [])
-
-  const handleDescPaste = useCallback(
-    (e: React.ClipboardEvent) => {
-      const files = extractClipboardFiles(e)
-      if (files.length === 0) return
-      e.preventDefault()
-
-      const imageFiles = files.filter((f) => isImageType(f.type))
-      const otherFiles = files.filter((f) => !isImageType(f.type))
-
-      for (const imageFile of imageFiles) {
-        if (imageFile.size > FILE_SIZE_LIMIT) {
-          toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${imageFile.name}`)
-          continue
-        }
-        insertPastedImage(imageFile, inlineImagesRef.current)
-      }
-      if (imageFiles.length > 0) checkDescEmpty()
-
-      if (otherFiles.length > 0) {
-        const oversized = otherFiles.filter((f) => f.size > FILE_SIZE_LIMIT)
-        if (oversized.length > 0) {
-          toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${oversized.map((f) => f.name).join(', ')}`)
-        }
-        const valid = otherFiles.filter((f) => f.size <= FILE_SIZE_LIMIT)
-        if (valid.length > 0) {
-          setStagedFiles((prev) => [...prev, ...valid])
-        }
-      }
-    },
-    [checkDescEmpty]
-  )
-
-  const handleDescDrop = useCallback(
-    async (e: React.DragEvent) => {
-      // Staged file chip drag
-      const stagedIndex = e.dataTransfer.getData('application/staged-file-index')
-      if (stagedIndex) {
-        e.preventDefault()
-        const index = parseInt(stagedIndex, 10)
-        const file = stagedFiles[index]
-        if (!file) return
-        placeCaretAtDropPoint(e)
-        if (isImageType(file.type)) {
-          insertPastedImage(file, inlineImagesRef.current)
-        } else {
-          const tempId = `file-${Date.now()}-${Math.random().toString(36).slice(2)}`
-          inlineFilesRef.current.set(tempId, file)
-          insertFileLinkAtCursor(tempId, file.name)
-        }
-        checkDescEmpty()
-        return
-      }
-      // Existing attachment drag
-      const attData = await handleAttachmentDrop(e, checkDescEmpty)
-      if (attData) {
-        droppedExistingRef.current.set(attData.id, attData)
-      }
-    },
-    [checkDescEmpty, stagedFiles]
-  )
-
-  const handleDescKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (handleEditorBackspace(e, inlineImagesRef.current)) {
-        checkDescEmpty()
-      }
-    },
-    [checkDescEmpty]
-  )
+  const handleChecklistDragEnd = (result: DropResult) => {
+    if (!result.destination) return
+    if (result.source.index === result.destination.index) return
+    setChecklistItems((prev) => {
+      const reordered = Array.from(prev)
+      const [moved] = reordered.splice(result.source.index, 1)
+      reordered.splice(result.destination!.index, 0, moved!)
+      return reordered
+    })
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -179,16 +108,11 @@ export function CreateTaskDialog({
 
     setSubmitting(true)
     try {
-      // Extract description from rich editor
-      let description: string | undefined
-      if (descEditorRef.current) {
-        description = extractRawBody(descEditorRef.current).trim() || undefined
-      }
+      const description = descRaw.trim() || undefined
 
       const hasInlineImages = inlineImagesRef.current.size > 0
-      const hasInlineFiles = inlineFilesRef.current.size > 0
 
-      // Create task (with temp IDs in description if inline images/files exist)
+      // Create task (with temp IDs in description if inline images exist)
       const task = await createTask.mutateAsync({
         title: title.trim(),
         description,
@@ -202,12 +126,10 @@ export function CreateTaskDialog({
         assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
       })
 
-      // Upload inline images/files and copy existing attachments
-      const hasDroppedExisting = droppedExistingRef.current.size > 0
-      if ((hasInlineImages || hasInlineFiles || hasDroppedExisting) && description) {
+      // Upload inline images and replace temp IDs in description
+      if (hasInlineImages && description) {
         let finalBody = description
 
-        // Upload new inline images
         for (const [tempId, file] of inlineImagesRef.current.entries()) {
           try {
             const attachment = await uploadAttachment.mutateAsync({
@@ -215,47 +137,10 @@ export function CreateTaskDialog({
               uploadedBy: user.id,
               target: { taskId: task.id },
             })
-            finalBody = finalBody.replace(`![](${tempId})`, `![](${attachment.id})`)
+            finalBody = replaceInlineTempId(finalBody, tempId, attachment.id, file.name)
           } catch (err) {
             toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
-            finalBody = finalBody.replace(`![](${tempId})`, '')
-          }
-        }
-
-        // Upload inline file links (non-images)
-        for (const [tempId, file] of inlineFilesRef.current.entries()) {
-          try {
-            const attachment = await uploadAttachment.mutateAsync({
-              file,
-              uploadedBy: user.id,
-              target: { taskId: task.id },
-            })
-            finalBody = finalBody.split(`%[${file.name}](${tempId})`).join(`%[${file.name}](${attachment.id})`)
-          } catch (err) {
-            toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
-            finalBody = finalBody.split(`%[${file.name}](${tempId})`).join('')
-          }
-        }
-
-        // Copy existing attachments dropped from other sources
-        for (const [origId, attData] of droppedExistingRef.current.entries()) {
-          // Skip if user deleted the inline reference
-          if (!finalBody.includes(`(${origId})`)) continue
-          try {
-            const copied = await copyAttachment(
-              attData.storagePath,
-              user.id,
-              attData.fileName,
-              attData.fileType,
-              attData.fileSize ?? 0,
-              { taskId: task.id },
-            )
-            finalBody = finalBody.split(`![](${origId})`).join(`![](${copied.id})`)
-            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join(`%[${attData.fileName}](${copied.id})`)
-          } catch (err) {
-            toast.error(`Failed to copy ${attData.fileName}: ${err instanceof Error ? err.message : 'Unknown error'}`)
-            finalBody = finalBody.split(`![](${origId})`).join('')
-            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join('')
+            finalBody = removeInlineTempId(finalBody, tempId)
           }
         }
 
@@ -270,9 +155,9 @@ export function CreateTaskDialog({
       }
 
       // Upload staged files
-      const inlineFiles = new Set([...inlineImagesRef.current.values(), ...inlineFilesRef.current.values()])
+      const inlineImageFiles = new Set(inlineImagesRef.current.values())
       for (const file of stagedFiles) {
-        if (inlineFiles.has(file)) continue
+        if (inlineImageFiles.has(file)) continue
         try {
           await uploadAttachment.mutateAsync({
             file,
@@ -291,6 +176,18 @@ export function CreateTaskDialog({
         } catch (err) {
           toast.error(`Failed to set dependencies: ${err instanceof Error ? err.message : 'Unknown error'}`)
         }
+      }
+
+      // Create checklist items after task creation
+      if (checklistItems.length > 0) {
+        for (let i = 0; i < checklistItems.length; i++) {
+          try {
+            await createChecklistItem(task.id, checklistItems[i]!, i)
+          } catch (err) {
+            toast.error(`Failed to create checklist item: ${err instanceof Error ? err.message : 'Unknown error'}`)
+          }
+        }
+        queryClient.invalidateQueries({ queryKey: taskKeys.all(projectId) })
       }
 
       toast.success('Task created')
@@ -338,23 +235,32 @@ export function CreateTaskDialog({
           <label className="text-sm font-medium text-foreground">
             Description
           </label>
-          <div className="relative">
-            <div
-              ref={descEditorRef}
-              contentEditable
-              onInput={checkDescEmpty}
-              onPaste={handleDescPaste}
-              onDrop={handleDescDrop}
-              onDragOver={(e) => e.preventDefault()}
-              onKeyDown={handleDescKeyDown}
-              className="w-full min-h-20 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset [&_img]:max-w-full [&_img]:rounded-lg"
-            />
-            {descEmpty && (
-              <div className="pointer-events-none absolute left-3 top-2 text-sm text-muted-foreground">
-                Describe the task...
-              </div>
-            )}
-          </div>
+          <RichTextEditor
+            content={descRaw}
+            onChange={setDescRaw}
+            placeholder="Describe the task..."
+            members={members ?? []}
+            onImagePaste={(file) => {
+              if (file.size > FILE_SIZE_LIMIT) {
+                toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${file.name}`)
+                return null
+              }
+              const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
+              inlineImagesRef.current.set(tempId, file)
+              return tempId
+            }}
+            stagedFiles={stagedFiles}
+            onStagedFileDrop={(file) => {
+              if (file.size > FILE_SIZE_LIMIT) {
+                toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${file.name}`)
+                return null
+              }
+              const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
+              inlineImagesRef.current.set(tempId, file)
+              return tempId
+            }}
+            minHeight="5rem"
+          />
         </div>
 
         {/* Attachments */}
@@ -365,7 +271,7 @@ export function CreateTaskDialog({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-2.5 text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-2.5 text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset"
           >
             <Paperclip className="h-4 w-4" />
             <span>Add files</span>
@@ -415,6 +321,60 @@ export function CreateTaskDialog({
               ))}
             </div>
           )}
+        </div>
+
+        {/* Checklist */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground">Checklist</label>
+          {checklistItems.length > 0 && (
+            <DragDropContext onDragEnd={handleChecklistDragEnd}>
+              <Droppable droppableId="staged-checklist">
+                {(provided) => (
+                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                    {checklistItems.map((item, i) => (
+                      <Draggable key={i} draggableId={`checklist-${i}`} index={i}>
+                        {(provided) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            className="flex items-center gap-2 rounded-md bg-muted px-2 py-1.5 text-sm"
+                          >
+                            <div {...provided.dragHandleProps} className="shrink-0 cursor-grab text-muted-foreground">
+                              <GripVertical className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="h-4 w-4 rounded border border-border shrink-0" />
+                            <span className="flex-1 min-w-0 truncate">{item}</span>
+                            <button
+                              type="button"
+                              onClick={() => setChecklistItems((prev) => prev.filter((_, idx) => idx !== i))}
+                              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+          )}
+          <input
+            type="text"
+            value={newChecklistTitle}
+            onChange={(e) => setNewChecklistTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newChecklistTitle.trim()) {
+                e.preventDefault()
+                setChecklistItems((prev) => [...prev, newChecklistTitle.trim()])
+                setNewChecklistTitle('')
+              }
+            }}
+            placeholder="Add checklist item..."
+            className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset"
+          />
         </div>
 
         <TagSelect

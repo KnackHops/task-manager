@@ -197,6 +197,33 @@ export function TaskListRow({ task, index, seconds = 0, onClick }: TaskListRowPr
             )}
           </div>
 
+          {/* Checklist progress */}
+          {task.checklist_items && task.checklist_items.length > 0 && (() => {
+            const done = task.checklist_items.filter((i) => i.is_done).length
+            const total = task.checklist_items.length
+            const pct = Math.round((done / total) * 100)
+            const r = 8
+            const circ = 2 * Math.PI * r
+            const offset = circ - (pct / 100) * circ
+            return (
+              <div className="hidden shrink-0 items-center gap-1 sm:flex" title={`${done}/${total} items`}>
+                <svg width="20" height="20" viewBox="0 0 20 20" className="shrink-0">
+                  <circle cx="10" cy="10" r={r} fill="none" className="stroke-muted" strokeWidth="2" />
+                  <circle
+                    cx="10" cy="10" r={r} fill="none"
+                    className="stroke-primary"
+                    strokeWidth="2"
+                    strokeDasharray={circ}
+                    strokeDashoffset={offset}
+                    strokeLinecap="round"
+                    transform="rotate(-90 10 10)"
+                  />
+                </svg>
+                <span className="text-[10px] text-muted-foreground">{done}/{total}</span>
+              </div>
+            )
+          })()}
+
           {/* Assignees (fixed slot) */}
           <div className="hidden w-[58px] shrink-0 justify-end sm:flex">
             {task.assignees && task.assignees.length > 0 && (

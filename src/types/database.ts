@@ -128,12 +128,23 @@ export interface TaskDependency {
   is_done: boolean
 }
 
+export interface ChecklistItem {
+  id: string
+  task_id: string
+  title: string
+  is_done: boolean
+  position: number
+  created_at: string
+  updated_at: string
+}
+
 export interface TaskWithRelations extends Task {
   assignees?: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>[]
   creator?: Pick<Profile, 'id' | 'full_name' | 'avatar_url'> | null
   column?: Pick<ProjectColumn, 'id' | 'name' | 'slug'> | null
   tags?: Pick<ProjectTag, 'id' | 'name' | 'slug' | 'color'>[]
   dependencies?: TaskDependency[]
+  checklist_items?: ChecklistItem[]
   comment_count?: number
   attachment_count?: number
 }

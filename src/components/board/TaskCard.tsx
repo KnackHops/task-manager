@@ -67,6 +67,23 @@ export function TaskCard({ task, index, onClick }: TaskCardProps) {
             {task.title}
           </p>
 
+          {task.checklist_items && task.checklist_items.length > 0 && (() => {
+            const done = task.checklist_items.filter((i) => i.is_done).length
+            const total = task.checklist_items.length
+            const pct = Math.round((done / total) * 100)
+            return (
+              <div className="mt-1.5 flex items-center gap-2">
+                <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-muted-foreground">{done}/{total}</span>
+              </div>
+            )
+          })()}
+
           {task.dependencies && task.dependencies.length > 0 && (
             <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
               <GitMerge className={cn('h-3 w-3 shrink-0', task.dependencies.every((d) => d.is_done) && 'text-emerald-500')} />

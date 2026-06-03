@@ -22,13 +22,19 @@ projects (name, slug, prefix, default_column_id, created_by)
   ──< project_columns (custom columns per project)
   ──< project_tags (custom tags per project)
   ──< project_members (membership + permissions)
-  ──< tasks (task_number, column_id, priority, archived, position)
+  ──< sprints (name, start_date, end_date, status, goal, story_points_target)
+  ──< tasks (task_number, column_id, sprint_id, priority, story_points, is_done, archived, position, start_date, due_date)
         ──< task_tags (many-to-many → project_tags)
         ──< task_assignees (many-to-many → profiles)
+        ──< task_dependencies (task_id, depends_on_id)
+        ──< task_checklist_items (id, title, is_done, position)
+        ──< task_time_sessions (id, user_id, started_at, ended_at)
+        ──< task_memory (key, value, type — persistent MCP/Claude facts)
         ──< comments (body, author_id, @mentions)
-        ──< attachments
+        ──< attachments (file_name, file_type, file_size, storage_path)
 
 notifications (user_id, type, task_id, comment_id, actor_id, message, is_read, project_slug)
+api_keys (user_id, key_hash, revoked_at, last_used_at)
 ```
 
 ### Route Structure
@@ -37,11 +43,14 @@ notifications (user_id, type, task_id, comment_id, actor_id, message, is_read, p
 /login                          — login page
 /signup                         — signup page
 /projects                       — project list (home after login)
-/p/:slug                        — project board (kanban view)
+/p/:slug                        — project board (kanban + list view)
 /p/:slug/sprints                — sprint analytics (burndown, velocity, summary)
+/p/:slug/gantt                  — Gantt chart view (timeline, drag-to-schedule)
 /p/:slug/archive                — project archive view (with sprint filter)
 /p/:slug/settings               — project settings (general, columns, tags, sprints, members, danger zone)
 /invites                        — pending project invites
+/settings                       — user settings (profile, API keys)
+/time-logs                      — time tracking logs (My Work)
 ```
 
 ### RLS Policy Model
@@ -1019,7 +1028,7 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
-## PHASE 14.13: MCP PER-TASK MEMORY ✅ COMPLETE (migration pending apply)
+## PHASE 14.13: MCP PER-TASK MEMORY ✅ COMPLETE
 
 > Persistent, per-task memory for Claude Code. Key-value facts scoped to a task, stored
 > server-side in Supabase so knowledge accumulates on the ticket across sessions and
@@ -1031,7 +1040,7 @@ search_tasks project=nonstop query="email template"   → search by text
 - [x] `supabase/migrations/022_task_memory.sql` — `task_memory` table (task_id FK ON DELETE CASCADE, key, value, type default 'fact', author_id FK → profiles, timestamps), `UNIQUE(task_id, key)` for upsert-by-key, index on task_id
 - [x] RLS (shared-per-task, mirrors comments): select `true`, insert checks `auth.uid() = author_id`, update/delete `true`
 - [x] `task_memory_updated_at` trigger (reuses `update_updated_at()`)
-- [ ] Apply migration to Supabase + redeploy MCP server
+- [x] Apply migration to Supabase + redeploy MCP server
 
 ### 14.13.2 MCP Tools — `mcp-server/src/tools/task-memory.ts`
 - [x] `read_task_memory` — all facts for a task, grouped by type (call at start of work)
@@ -1085,14 +1094,14 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
-## PHASE 14.15: GANTT CHART ✅ COMPLETE (migration pending apply)
+## PHASE 14.15: GANTT CHART ✅ COMPLETE
 
 > Timeline view of dated tasks, grouped by column, with drag-to-schedule editing.
 > Spec: `docs/superpowers/specs/2026-05-31-gantt-chart-design.md`
 
 ### 14.15.1 Task dates
 - [x] `supabase/migrations/023_task_dates.sql` — nullable `start_date` + `due_date` on `tasks`
-- [ ] Apply migration to Supabase
+- [x] Apply migration to Supabase
 - [x] Types: `start_date`/`due_date` added to `Task`, `UpdateTaskInput`, `CreateTaskInput` (`TASK_SELECT` uses `*`, so reads include them)
 - [x] Date inputs in `TaskDetailPanel` Details grid and `CreateTaskDialog` (start ≤ due via min/max)
 
@@ -1109,23 +1118,170 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
+## PHASE 14.16: TASK DEPENDENCIES ✅ COMPLETE
+
+> Task-to-task dependency relationships. "Blocked by" links displayed in task detail and create dialog.
+
+### 14.16.1 Migration (024)
+- [x] `supabase/migrations/024_task_dependencies.sql` — `task_dependencies` table (task_id, depends_on_id)
+- [x] RLS policies for project members
+
+### 14.16.2 Data Layer
+- [x] `src/services/dependencies.ts` — `setTaskDependencies`, fetch dependencies
+- [x] `src/hooks/useDependencies.ts` — React Query mutation `useSetTaskDependencies`
+
+### 14.16.3 UI
+- [x] `src/components/ui/DependencySelect.tsx` — multi-select for task dependencies
+- [x] `CreateTaskDialog.tsx` — dependency selection during task creation
+- [x] `TaskDetailPanel.tsx` — dependency display + editing
+
+---
+
+## PHASE 14.17: MY WORK + TIME TRACKING ✅ COMPLETE
+
+> Per-task time tracking with start/stop timer. Global time logs view. Running timer bar in sidebar. MCP tools for timer control.
+
+### 14.17.1 Migration (025)
+- [x] `supabase/migrations/025_time_tracking.sql` — `task_time_sessions` table (id, task_id, user_id, started_at, ended_at)
+- [x] RLS policies for project members
+
+### 14.17.2 Data Layer
+- [x] `src/services/time-sessions.ts` — start/stop/fetch time sessions
+- [x] `src/hooks/useTimeTracking.ts` — timer hooks (useStartTimer, useStopTimer, useTimerStatus, useTaskTotal)
+- [x] `src/lib/time-format.ts` — duration formatting utilities
+
+### 14.17.3 UI Components
+- [x] `src/components/task/TaskTimerButton.tsx` — start/stop timer on task detail panel
+- [x] `src/components/task/TaskTimeDisplay.tsx` — total time display per task
+- [x] `src/components/my-work/RunningBar.tsx` — active timer bar
+- [x] `src/components/my-work/SessionLog.tsx` — session log entries
+- [x] `src/components/my-work/TimeLogsView.tsx` — time logs list view
+
+### 14.17.4 Route
+- [x] `src/routes/_app/time-logs.tsx` — `/time-logs` route (My Work / Time Logs)
+- [x] Sidebar link
+
+### 14.17.5 MCP Tools
+- [x] `mcp-server/src/tools/time-start.ts` — `start_task_timer`
+- [x] `mcp-server/src/tools/time-stop.ts` — `stop_task_timer`
+- [x] `mcp-server/src/tools/time-status.ts` — `get_timer_status`
+- [x] `mcp-server/src/tools/time-summary.ts` — `get_time_summary` (today/month/sprint)
+
+---
+
+## PHASE 14.18: ADDITIONAL MIGRATIONS ✅ COMPLETE
+
+> Misc schema fixes and improvements.
+
+- [x] `supabase/migrations/020_join_notification_type.sql` — join notification type
+- [x] `supabase/migrations/021_allow_orphan_attachments.sql` — allow attachments without task/comment (for inline upload flow)
+- [x] `supabase/migrations/026_auto_project_prefix.sql` — auto-generate project prefix
+- [x] `supabase/migrations/028_relax_project_prefix.sql` — relax project prefix constraints
+
+---
+
+## PHASE 15.1: TASK CHECKLISTS ✅ COMPLETE
+
+> Per-task checklist items with completion tracking. Progress bar on card view, circular progress on list view. Drag-to-reorder items. Checklist section in CreateTaskDialog with drag-to-reorder staged items.
+
+### 15.1.1 Migration (029)
+- [x] `supabase/migrations/029_task_checklists.sql` — `task_checklist_items` table (id, task_id FK CASCADE, title, is_done, position, timestamps)
+- [x] Indexes on `(task_id)` and `(task_id, position)`
+- [x] RLS: SELECT for project members, INSERT/UPDATE/DELETE for editors + owners
+- [x] `updated_at` trigger (reuse `update_updated_at()`)
+- [x] Apply migration to Supabase
+
+### 15.1.2 Types
+- [x] `src/types/database.ts` — `ChecklistItem` interface, add `checklist_items?: ChecklistItem[]` to `TaskWithRelations`
+
+### 15.1.3 Data Layer
+- [x] `src/services/tasks.ts` — add `task_checklist_items(id, title, is_done, position)` to `TASK_SELECT`, update `flattenTaskRow` to extract + sort by position
+- [x] `src/services/checklists.ts` — `createChecklistItem`, `updateChecklistItem`, `deleteChecklistItem`, `reorderChecklistItems`
+- [x] `src/hooks/useChecklists.ts` — React Query mutations with optimistic updates on `taskKeys`
+
+### 15.1.4 Checklist Editor
+- [x] `src/components/task/ChecklistSection.tsx` — checkbox + editable title + delete per item, "Add item" input, drag-to-reorder, progress bar header ("Checklist 3/5"), gated behind `canEditTask`
+- [x] Integrate in `TaskDetailPanel` (below description, above attachments)
+- [x] `CreateTaskDialog.tsx` — staged checklist items with drag-to-reorder (`@hello-pangea/dnd`), created post-task-creation
+
+### 15.1.5 Progress Display
+- [x] `TaskCard.tsx` — thin progress bar after title (only when items exist)
+- [x] `TaskListRow.tsx` — circular SVG progress indicator after activity column (only when items exist, hidden mobile)
+
+### 15.1.6 MCP Updates
+- [x] `mcp-server/src/tools/get-task.ts` — include checklist items + progress in output
+- [x] `mcp-server/src/tools/checklist.ts` — `update_checklist_item` tool (toggle is_done, edit title)
+
+### 15.1.7 Bug Fixes
+- [x] Checklist count in card/list view — re-invalidate task queries after checklist creation in CreateTaskDialog
+- [x] File-link inline temp ID replacement — `replaceInlineTempId`/`removeInlineTempId` helpers handle both `![](tempId)` and `%[filename](tempId)` patterns
+
+### 15.1.8 Build Verification
+- [x] `npx tsc --noEmit` — passes clean
+
+---
+
+## PHASE 15.2: RICH TEXT EDITOR (TIPTAP) ✅ COMPLETE
+
+> Replaced raw contentEditable with Tiptap for descriptions and comments. Bold, italic, bullet lists, mentions. Plain text storage format with markdown-style extensions. Paste images, inline file links, staged chip drag-to-inline all supported. Tiptap packages pinned to 3.23.6 via npm overrides.
+
+### 15.2.1 Format Serializer
+- [x] `src/lib/tiptap-serializer.ts` — `toTiptapDoc(rawBody)` and `fromTiptapDoc(doc)` converting between plain text format and Tiptap JSON
+- [x] Tokens: `**bold**`, `*italic*`, `- list items`, `` `code` ``, `![](uuid)` images, `%[filename](uuid)` file links, `@[Name](uuid)` mentions
+
+### 15.2.2 Tiptap Editor Component
+- [x] `src/components/ui/RichTextEditor.tsx` — `useEditor` + `EditorContent`, StarterKit, CustomImage (with `data-inline-id`), FileLink (atom node), StripIndent (paste fix), Mention
+- [x] Markdown shortcuts: `*` + space → bullet, `**text**` → bold, etc.
+- [x] Mention: `@` trigger with `MentionSuggestion` component
+- [x] Paste images: preserved existing flow
+- [x] Strip indentation from pasted content (StripIndent extension)
+- [x] Staged file drag-to-inline: `stagedFiles` + `onStagedFileDrop` props, inserts image or fileLink node
+- [x] Click-to-focus wrapper with minHeight
+
+### 15.2.3 Rendering Updates
+- [x] `src/lib/mentions.ts` — `parseBody()` + `BodySegment` handles all inline tokens
+- [x] `InlineCommentImage` + `InlineFileLink` components for read-mode rendering
+
+### 15.2.4 Replace Editors
+- [x] `TaskDetailPanel.tsx` — description editor → `<RichTextEditor>`
+- [x] `CreateTaskDialog.tsx` — description editor → `<RichTextEditor>`
+- [x] `CommentForm.tsx` — comment editor → `<RichTextEditor>`
+- [x] `CommentItem.tsx` — edit comment editor → `<RichTextEditor>`
+
+### 15.2.5 Cleanup
+- [x] `src/lib/rich-editor.ts` — removed all old contentEditable functions. Kept `parseAttachmentDrop` + added `replaceInlineTempId`/`removeInlineTempId` helpers
+- [x] npm overrides for `@tiptap/core` and `@tiptap/pm` pinned to 3.23.6 (prevents nested version conflicts)
+
+### 15.2.6 Bug Fixes
+- [x] Dead zone in TaskDetailPanel description — removed `max-h-64 overflow-y-auto`
+- [x] cursor-text bleeding onto staged file chips — moved to EditorContent className
+- [x] Staged chip drag not working — added `draggable`/`onDragStart` to chips, implemented `stagedFiles`/`onStagedFileDrop` in all editors
+- [x] Non-image file inline temp ID not replaced on save — `replaceInlineTempId`/`removeInlineTempId` handle both `![](tempId)` and `%[filename](tempId)` patterns
+
+### 15.2.7 Build Verification
+- [x] `npx tsc --noEmit` — passes clean
+
+---
+
 ## FILE STRUCTURE (Current)
 
 ```
 task-manager/
 ├── src/
 │   ├── components/
-│   │   ├── archive/          # ArchiveView.tsx (search, tag filter, sprint filter, optimistic)
+│   │   ├── archive/          # ArchiveView.tsx
 │   │   ├── attachment/       # AttachmentList.tsx, AttachmentItem.tsx, FileUpload.tsx
-│   │   ├── board/            # BoardContainer.tsx, BoardColumn.tsx, TaskCard.tsx, SprintFilterDropdown.tsx, SprintTaskSelectionPanel.tsx
-│   │   ├── comment/          # CommentList.tsx, CommentForm.tsx, CommentItem.tsx, MentionDropdown.tsx
+│   │   ├── board/            # BoardContainer.tsx, BoardColumn.tsx, BoardListView.tsx, TaskCard.tsx, TaskListRow.tsx, MyTasksView.tsx, SprintFilterDropdown.tsx, SprintTaskSelectionPanel.tsx
+│   │   ├── comment/          # CommentList.tsx, CommentForm.tsx, CommentItem.tsx, MentionDropdown.tsx, MentionPopover.tsx, InlineCommentImage.tsx, InlineFileLink.tsx
+│   │   ├── gantt/            # GanttView.tsx, GanttBar.tsx, ScheduleTaskDialog.tsx
+│   │   ├── my-work/          # RunningBar.tsx, SessionLog.tsx, TimeLogsView.tsx
 │   │   ├── notification/     # NotificationBell.tsx, NotificationDropdown.tsx
 │   │   ├── sprint-analytics/ # SprintSummaryCard.tsx, BurndownChart.tsx, VelocityChart.tsx
-│   │   ├── task/             # CreateTaskDialog.tsx, TaskDetailPanel.tsx
+│   │   ├── task/             # CreateTaskDialog.tsx, TaskDetailPanel.tsx, ChecklistSection.tsx, TaskTimerButton.tsx, TaskTimeDisplay.tsx
 │   │   ├── project/          # CreateProjectDialog.tsx, ProjectSwitcher.tsx
 │   │   ├── settings/         # ProjectGeneralSettings.tsx, ColumnManager.tsx, TagManager.tsx, MemberManager.tsx, SprintManager.tsx, DangerZone.tsx, ApiKeyManager.tsx, ProfileSettings.tsx
 │   │   ├── layout/           # AppShell.tsx, Sidebar.tsx, Header.tsx
-│   │   └── ui/               # Badge.tsx, Dialog.tsx, ConfirmDialog.tsx, Select.tsx, Avatar.tsx, TagSelect.tsx, AssigneeSelect.tsx, ColorPicker.tsx
+│   │   └── ui/               # Badge.tsx, Dialog.tsx, ConfirmDialog.tsx, Select.tsx, Avatar.tsx, Skeleton.tsx, TagSelect.tsx, AssigneeSelect.tsx, DependencySelect.tsx, ColorPicker.tsx, TaskNumberPill.tsx, MentionSuggestion.tsx, RichTextEditor.tsx
 │   ├── contexts/
 │   │   ├── AuthContext.tsx
 │   │   └── ProjectContext.tsx
@@ -1138,33 +1294,43 @@ task-manager/
 │   │   ├── useInvites.ts     # usePendingInvites, usePendingInviteCount
 │   │   ├── useAssignees.ts   # optimistic useSetTaskAssignees
 │   │   ├── useAttachments.ts # useTaskAttachments, useCommentAttachments, upload/delete/reorder
+│   │   ├── useChecklists.ts  # useCreateChecklistItem, useUpdateChecklistItem, useDeleteChecklistItem, useReorderChecklistItems
 │   │   ├── useComments.ts    # useComments + Realtime, CRUD mutations
+│   │   ├── useDependencies.ts # useSetTaskDependencies
 │   │   ├── useNotifications.ts # useNotifications, useUnreadCount + Realtime, mark read
 │   │   ├── useSprints.ts     # useSprints, useCreateSprint, useUpdateSprint, useDeleteSprint, useCompleteSprint
 │   │   ├── useSprintAnalytics.ts # useSprintSummary, useSprintBurndown, useVelocity
 │   │   ├── useBulkAssignSprint.ts # useBulkAssignSprint (bulk assign tasks to sprint)
+│   │   ├── useBoardDnd.ts    # board drag-and-drop logic
+│   │   ├── useTimeTracking.ts # useStartTimer, useStopTimer, useTimerStatus, useTaskTotal
 │   │   ├── useApiKeys.ts     # useApiKeys, useCreateApiKey, useRevokeApiKey
 │   │   └── useProfiles.ts    # useUpdateProfile, useUploadAvatar, useRemoveAvatar
 │   ├── services/
 │   │   ├── projects.ts
-│   │   ├── tasks.ts          # fetchTasks/fetchTask with comment_count, attachment_count
+│   │   ├── tasks.ts          # fetchTasks/fetchTask with comment_count, attachment_count, checklist_items
 │   │   ├── columns.ts
 │   │   ├── tags.ts
 │   │   ├── members.ts        # invite, accept/decline, leave, transfer, remove (with notifications)
 │   │   ├── assignees.ts      # setTaskAssignees
 │   │   ├── attachments.ts    # uploadAttachment, deleteAttachment, getSignedUrl, reorderAttachments
+│   │   ├── checklists.ts     # createChecklistItem, updateChecklistItem, deleteChecklistItem, reorderChecklistItems
 │   │   ├── comments.ts       # fetchComments, createComment, updateComment, deleteComment
+│   │   ├── dependencies.ts   # setTaskDependencies
 │   │   ├── notifications.ts  # fetchNotifications, unreadCount, markAsRead, markAllAsRead
-│   │   ├── sprints.ts        # fetchSprints, createSprint, updateSprint, deleteSprint, completeSprint (auto-archives done), autoAssignTasksToSprint
+│   │   ├── sprints.ts        # fetchSprints, createSprint, updateSprint, deleteSprint, completeSprint
 │   │   ├── sprint-analytics.ts # fetchSprintSummary, fetchSprintBurndown, fetchVelocity
+│   │   ├── time-sessions.ts  # startSession, stopSession, fetchSessions
+│   │   ├── user-task-order.ts # user task ordering
 │   │   ├── api-keys.ts       # generateKey, hashKey, createApiKey, listApiKeys, revokeApiKey
 │   │   └── profiles.ts       # updateProfile, uploadAvatar, removeAvatar
 │   ├── lib/
 │   │   ├── supabase.ts       # lockAcquireTimeout fix
 │   │   ├── queryClient.ts    # shared QueryClient instance (imported by main.tsx + AuthContext)
 │   │   ├── mentions.ts       # encodeMention, parseBody, filterMembers, MENTION_REGEX
-│   │   ├── rich-editor.ts    # contentEditable utilities (extractRawBody, populateEditor, inline insert)
+│   │   ├── rich-editor.ts    # parseAttachmentDrop (DnD), replaceInlineTempId, removeInlineTempId
+│   │   ├── tiptap-serializer.ts # toTiptapDoc/fromTiptapDoc — plain text ↔ Tiptap JSON
 │   │   ├── file-utils.ts     # isImageType, file type helpers
+│   │   ├── time-format.ts    # duration formatting
 │   │   ├── constants.ts
 │   │   ├── theme.ts
 │   │   └── utils.ts
@@ -1173,20 +1339,22 @@ task-manager/
 │   ├── routes/
 │   │   ├── __root.tsx
 │   │   ├── index.tsx           # redirect → /projects
-│   │   ├── login.tsx           # password reveal toggle
-│   │   ├── signup.tsx          # password reveal toggle
+│   │   ├── login.tsx
+│   │   ├── signup.tsx
 │   │   └── _app/
 │   │       ├── route.tsx       # Auth guard
 │   │       ├── projects.tsx    # Project list
 │   │       ├── invites.tsx     # Pending invites page
-│   │       ├── settings.tsx    # User settings (API key management)
+│   │       ├── settings.tsx    # User settings (profile, API keys)
+│   │       ├── time-logs.tsx   # Time logs / My Work
 │   │       ├── sprints.tsx     # Global sprints placeholder
 │   │       └── p/
 │   │           ├── $slug.tsx       # Project layout + ProjectProvider
 │   │           └── $slug/
-│   │               ├── index.tsx   # Board view
-│   │               ├── sprints.tsx # Sprint analytics (burndown, velocity, summary)
-│   │               ├── archive.tsx # Archive view (with sprint filter)
+│   │               ├── index.tsx   # Board view (kanban + list)
+│   │               ├── sprints.tsx # Sprint analytics
+│   │               ├── gantt.tsx   # Gantt chart view
+│   │               ├── archive.tsx # Archive view
 │   │               └── settings.tsx # Project settings
 │   ├── routeTree.gen.ts
 │   └── main.tsx
@@ -1197,8 +1365,8 @@ task-manager/
 │       ├── 003_default_column_and_task_ids.sql
 │       ├── 004_multi_assignee.sql
 │       ├── 005_notifications.sql
-│       ├── 006_sprints.sql
-│       ├── 007_task_sprint.sql
+│       ├── 006_storage_attachments.sql
+│       ├── 007_attachment_position.sql
 │       ├── 008_story_points.sql
 │       ├── 009_can_manage_sprints.sql
 │       ├── 010_default_sprint_duration.sql
@@ -1211,8 +1379,15 @@ task-manager/
 │       ├── 017_notifications_insert_policy.sql
 │       ├── 018_api_keys.sql
 │       ├── 019_avatars_bucket.sql
-│       ├── 022_task_memory.sql    # per-task MCP memory (key-value facts)
-│       └── 023_task_dates.sql     # task start_date + due_date (Gantt)
+│       ├── 020_join_notification_type.sql
+│       ├── 021_allow_orphan_attachments.sql
+│       ├── 022_task_memory.sql
+│       ├── 023_task_dates.sql
+│       ├── 024_task_dependencies.sql
+│       ├── 025_time_tracking.sql
+│       ├── 026_auto_project_prefix.sql
+│       ├── 028_relax_project_prefix.sql
+│       └── 029_task_checklists.sql
 ├── .env.example
 ├── .env.local
 ├── vite.config.ts
@@ -1227,7 +1402,24 @@ task-manager/
 │       ├── auth.ts          # API key auth, magic link sessions, 55min cache
 │       ├── supabase.ts      # Admin + anon Supabase clients
 │       ├── helpers.ts       # Task ID parsing, slug resolution
-│       └── tools/           # One file per MCP tool (list-projects, list-tasks, get-task, search-tasks, get-attachment-url, read-attachment, create-task, update-task, add-comment) + task-memory.ts (read/write/delete/clear memory)
+│       └── tools/
+│           ├── list-projects.ts
+│           ├── list-tasks.ts
+│           ├── list-tags.ts
+│           ├── get-task.ts       # includes checklist items + progress
+│           ├── search-tasks.ts
+│           ├── get-attachment-url.ts
+│           ├── read-attachment.ts
+│           ├── create-task.ts
+│           ├── update-task.ts
+│           ├── add-comment.ts
+│           ├── checklist.ts      # update_checklist_item
+│           ├── task-memory.ts    # read/write/delete/clear memory
+│           ├── time-start.ts     # start_task_timer
+│           ├── time-stop.ts      # stop_task_timer
+│           ├── time-status.ts    # get_timer_status
+│           ├── time-summary.ts   # get_time_summary
+│           └── whoami.ts
 └── todo/
     └── MASTER_TASK_LIST.md
 ```
@@ -1246,11 +1438,15 @@ task-manager/
 | `tasks` | Tasks (task_number, column_id, sprint_id, priority, story_points, is_done, done_at, archived, position, start_date, due_date) |
 | `task_tags` | Many-to-many join (task ↔ tag) |
 | `task_assignees` | Many-to-many join (task ↔ profiles) |
+| `task_dependencies` | Task dependency relationships (task_id, depends_on_id) |
+| `task_checklist_items` | Per-task checklist items (title, is_done, position) |
+| `task_time_sessions` | Time tracking sessions (task_id, user_id, started_at, ended_at) |
+| `task_memory` | Per-task persistent memory for MCP/Claude (key-value facts, shared per task, cascade-deleted) |
 | `notifications` | Per-user notifications (comment, mention, assignment, invite, transfer, leave, kick) |
 | `sprints` | Sprint management (name, project_id, start_date, end_date, status, goal, story_points_target) |
-| `comments` | Task comments (with @mention support) |
-| `task_memory` | Per-task persistent memory for MCP/Claude (key-value facts, shared per task, cascade-deleted) |
-| `attachments` | File attachments |
+| `comments` | Task comments (with @mention support, rich text with inline images/file links) |
+| `attachments` | File attachments (task or comment level, supports inline embedding) |
+| `api_keys` | MCP API key auth (user_id, key_hash, revoked_at, last_used_at) |
 | `activity_log` | Task activity history |
 
 ---

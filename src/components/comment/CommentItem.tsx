@@ -7,17 +7,7 @@ import { parseBody, getFirstName } from '@/lib/mentions'
 import { MentionPopover } from './MentionPopover'
 import { InlineCommentImage } from './InlineCommentImage'
 import { InlineFileLink } from './InlineFileLink'
-import {
-  extractRawBody,
-  handleEditorBackspace,
-  insertPastedImage,
-  insertFileLinkAtCursor,
-  handleAttachmentDrop,
-  placeCaretAtDropPoint,
-  populateEditorFromBody,
-  type AttachmentDropData,
-} from '@/lib/rich-editor'
-import { copyAttachment } from '@/services/attachments'
+import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import {
   DragDropContext,
   Droppable,
@@ -29,13 +19,12 @@ import {
   useDeleteAttachment,
   useUploadAttachment,
   useReorderAttachments,
-  attachmentKeys,
 } from '@/hooks/useAttachments'
-import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
-import { FILE_SIZE_LIMIT, formatFileSize, extractClipboardFiles, isImageType } from '@/lib/file-utils'
+import { FILE_SIZE_LIMIT, formatFileSize } from '@/lib/file-utils'
+import { replaceInlineTempId, removeInlineTempId } from '@/lib/rich-editor'
 import type { CommentWithAuthor, ProjectMemberWithProfile, AttachmentWithUploader } from '@/types/database'
 
 interface CommentItemProps {
@@ -56,20 +45,17 @@ export function CommentItem({
   onDelete,
 }: CommentItemProps) {
   const { user } = useAuth()
-  const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const [saving, setSaving] = useState(false)
+  const [editRaw, setEditRaw] = useState('')
   const { data: attachments } = useCommentAttachments(comment.id)
   const deleteAttach = useDeleteAttachment(undefined, comment.id)
   const uploadAttach = useUploadAttachment()
   const reorderAttach = useReorderAttachments(undefined, comment.id)
-  const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inlineImagesRef = useRef<Map<string, File>>(new Map())
-  const inlineFilesRef = useRef<Map<string, File>>(new Map())
-  const droppedExistingRef = useRef<Map<string, AttachmentDropData>>(new Map())
 
   const isEdited = comment.updated_at !== comment.created_at
   const segments = parseBody(comment.body)
@@ -91,24 +77,11 @@ export function CommentItem({
     return map
   }, [members])
 
-  const startEditing = useCallback(async () => {
+  const startEditing = useCallback(() => {
+    setEditRaw(comment.body)
     setEditing(true)
     inlineImagesRef.current.clear()
-    inlineFilesRef.current.clear()
-    droppedExistingRef.current.clear()
-    // Wait for DOM to render the contentEditable div
-    requestAnimationFrame(async () => {
-      if (editorRef.current) {
-        await populateEditorFromBody(
-          editorRef.current,
-          comment.body,
-          allAttachments,
-          memberMap
-        )
-        editorRef.current.focus()
-      }
-    })
-  }, [comment.body, allAttachments, memberMap])
+  }, [comment.body])
 
   const handleAddFiles = useCallback((files: FileList | File[]) => {
     const arr = Array.from(files)
@@ -122,73 +95,12 @@ export function CommentItem({
     }
   }, [])
 
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => {
-      const files = extractClipboardFiles(e)
-      if (files.length === 0) return
-      e.preventDefault()
-
-      const imageFiles = files.filter((f) => isImageType(f.type))
-      const otherFiles = files.filter((f) => !isImageType(f.type))
-
-      for (const imageFile of imageFiles) {
-        if (imageFile.size > FILE_SIZE_LIMIT) {
-          toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${imageFile.name}`)
-          continue
-        }
-        insertPastedImage(imageFile, inlineImagesRef.current)
-      }
-
-      if (otherFiles.length > 0) {
-        handleAddFiles(otherFiles)
-      }
-    },
-    [handleAddFiles]
-  )
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (handleEditorBackspace(e, inlineImagesRef.current)) {
-        // handled
-      }
-    },
-    []
-  )
-
-  const handleDrop = useCallback(
-    async (e: React.DragEvent) => {
-      const stagedIndex = e.dataTransfer.getData('application/staged-file-index')
-      if (stagedIndex) {
-        e.preventDefault()
-        const index = parseInt(stagedIndex, 10)
-        const file = stagedFiles[index]
-        if (!file) return
-        placeCaretAtDropPoint(e)
-        if (isImageType(file.type)) {
-          insertPastedImage(file, inlineImagesRef.current)
-        } else {
-          const tempId = `file-${Date.now()}-${Math.random().toString(36).slice(2)}`
-          inlineFilesRef.current.set(tempId, file)
-          insertFileLinkAtCursor(tempId, file.name)
-        }
-        return
-      }
-
-      const attData = await handleAttachmentDrop(e, () => {})
-      if (attData) {
-        droppedExistingRef.current.set(attData.id, attData)
-      }
-    },
-    [stagedFiles]
-  )
-
   const handleSave = async () => {
-    const el = editorRef.current
-    if (!el || !user) return
+    if (!user) return
 
     setSaving(true)
     try {
-      let finalBody = extractRawBody(el).trim()
+      let finalBody = editRaw.trim()
       const newAttachIds = new Set<string>()
 
       // Upload new inline images (temp IDs → real IDs)
@@ -200,58 +112,14 @@ export function CommentItem({
               uploadedBy: user.id,
               target: { commentId: comment.id },
             })
-            finalBody = finalBody.replace(`![](${tempId})`, `![](${attachment.id})`)
+            finalBody = replaceInlineTempId(finalBody, tempId, attachment.id, file.name)
             newAttachIds.add(attachment.id)
           } catch (err) {
             toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
-            finalBody = finalBody.replace(`![](${tempId})`, '')
+            finalBody = removeInlineTempId(finalBody, tempId)
           }
         }
         finalBody = finalBody.trim() || comment.body
-      }
-
-      // Upload inline file links (non-images)
-      if (inlineFilesRef.current.size > 0) {
-        for (const [tempId, file] of inlineFilesRef.current.entries()) {
-          try {
-            const attachment = await uploadAttach.mutateAsync({
-              file,
-              uploadedBy: user.id,
-              target: { commentId: comment.id },
-            })
-            finalBody = finalBody.split(`%[${file.name}](${tempId})`).join(`%[${file.name}](${attachment.id})`)
-            newAttachIds.add(attachment.id)
-          } catch (err) {
-            toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
-            finalBody = finalBody.split(`%[${file.name}](${tempId})`).join('')
-          }
-        }
-        finalBody = finalBody.trim() || comment.body
-      }
-
-      // Copy existing attachments dropped from other sources
-      if (droppedExistingRef.current.size > 0) {
-        for (const [origId, attData] of droppedExistingRef.current.entries()) {
-          try {
-            const copied = await copyAttachment(
-              attData.storagePath,
-              user.id,
-              attData.fileName,
-              attData.fileType,
-              attData.fileSize ?? 0,
-              { commentId: comment.id },
-            )
-            finalBody = finalBody.split(`![](${origId})`).join(`![](${copied.id})`)
-            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join(`%[${attData.fileName}](${copied.id})`)
-            newAttachIds.add(copied.id)
-          } catch (err) {
-            toast.error(`Failed to copy ${attData.fileName}: ${err instanceof Error ? err.message : 'Unknown error'}`)
-            finalBody = finalBody.split(`![](${origId})`).join('')
-            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join('')
-          }
-        }
-        finalBody = finalBody.trim() || comment.body
-        await queryClient.invalidateQueries({ queryKey: attachmentKeys.comment(comment.id) })
       }
 
       // Strip inline refs to deleted attachments
@@ -260,13 +128,11 @@ export function CommentItem({
         if (id.startsWith('temp-')) return match // shouldn't happen but guard
         if (currentAttachIds.has(id)) return match
         if (newAttachIds.has(id)) return match
-        if (droppedExistingRef.current.has(id)) return match
         return '' // deleted attachment — strip
       })
       finalBody = finalBody.replace(/%\[[^\]]*\]\(([^)]+)\)/g, (match, id) => {
         if (currentAttachIds.has(id)) return match
         if (newAttachIds.has(id)) return match
-        if (droppedExistingRef.current.has(id)) return match
         return ''
       })
       finalBody = finalBody.trim() || comment.body
@@ -275,10 +141,8 @@ export function CommentItem({
         await onEdit(comment.id, finalBody)
       }
 
-      // Upload staged files (skip if already inlined)
-      const inlineFiles = new Set([...inlineImagesRef.current.values(), ...inlineFilesRef.current.values()])
+      // Upload staged files
       for (const file of stagedFiles) {
-        if (inlineFiles.has(file)) continue
         try {
           await uploadAttach.mutateAsync({
             file,
@@ -293,8 +157,6 @@ export function CommentItem({
       setSaving(false)
       setStagedFiles([])
       inlineImagesRef.current.clear()
-      inlineFilesRef.current.clear()
-      droppedExistingRef.current.clear()
       setEditing(false)
     }
   }
@@ -314,8 +176,6 @@ export function CommentItem({
   const handleCancelEdit = () => {
     setStagedFiles([])
     inlineImagesRef.current.clear()
-    inlineFilesRef.current.clear()
-    droppedExistingRef.current.clear()
     setEditing(false)
   }
 
@@ -362,14 +222,31 @@ export function CommentItem({
 
         {editing ? (
           <div className="mt-1 space-y-2">
-            <div
-              ref={editorRef}
-              contentEditable
-              onPaste={handlePaste}
-              onKeyDown={handleKeyDown}
-              onDrop={handleDrop}
-              onDragOver={(e) => e.preventDefault()}
-              className="w-full min-h-[2.5rem] rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset [&_img]:max-w-full [&_img]:rounded-lg"
+            <RichTextEditor
+              content={editRaw}
+              onChange={setEditRaw}
+              placeholder="Edit comment..."
+              members={members}
+              onImagePaste={(file) => {
+                if (file.size > FILE_SIZE_LIMIT) {
+                  toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${file.name}`)
+                  return null
+                }
+                const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
+                inlineImagesRef.current.set(tempId, file)
+                return tempId
+              }}
+              stagedFiles={stagedFiles}
+              onStagedFileDrop={(file) => {
+                if (file.size > FILE_SIZE_LIMIT) {
+                  toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${file.name}`)
+                  return null
+                }
+                const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
+                inlineImagesRef.current.set(tempId, file)
+                return tempId
+              }}
+              minHeight="2.5rem"
             />
 
             {/* Existing attachments (reorderable) */}
@@ -472,7 +349,7 @@ export function CommentItem({
             </div>
           </div>
         ) : (
-          <div className="mt-0.5 text-sm text-foreground whitespace-pre-wrap break-words">
+          <div className="mt-0.5 text-sm text-foreground whitespace-pre-wrap wrap-break-word">
             {segments.map((seg, i) =>
               seg.type === 'mention' ? (
                 <MentionPopover
@@ -497,8 +374,24 @@ export function CommentItem({
                   fileName={seg.fileName}
                   attachments={allAttachments}
                 />
+              ) : seg.type === 'bold' ? (
+                <strong key={i} className="font-semibold">{seg.value}</strong>
+              ) : seg.type === 'italic' ? (
+                <em key={i}>{seg.value}</em>
+              ) : seg.type === 'strike' ? (
+                <s key={i} className="text-muted-foreground">{seg.value}</s>
+              ) : seg.type === 'code' ? (
+                <code key={i} className="rounded bg-muted px-1 py-0.5 text-xs font-mono">{seg.value}</code>
+              ) : seg.type === 'link' ? (
+                <a key={i} href={seg.href} target="_blank" rel="noopener noreferrer" className="text-primary underline">{seg.text}</a>
+              ) : seg.type === 'list' ? (
+                seg.ordered ? (
+                  <ol key={i} className="list-decimal pl-5 my-1">{seg.items.map((item, j) => <li key={j}>{item}</li>)}</ol>
+                ) : (
+                  <ul key={i} className="list-disc pl-5 my-1">{seg.items.map((item, j) => <li key={j}>{item}</li>)}</ul>
+                )
               ) : (
-                <span key={i}>{seg.value}</span>
+                <span key={i}>{'value' in seg ? seg.value : ''}</span>
               )
             )}
           </div>

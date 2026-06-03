@@ -59,7 +59,7 @@ export function TagSelect({
         }}
         className={cn(
           'flex min-h-[40px] w-full items-center gap-1 rounded-lg border border-input bg-background px-3 py-1.5 text-sm text-foreground cursor-pointer',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset'
         )}
       >
         <div className="flex flex-1 flex-wrap gap-1">

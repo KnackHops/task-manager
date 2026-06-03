@@ -27,6 +27,7 @@ import {
   registerDeleteTaskMemory,
   registerClearTaskMemory,
 } from './tools/task-memory.js'
+import { registerUpdateChecklistItem } from './tools/checklist.js'
 
 const PORT = parseInt(process.env.PORT || '3000', 10)
 
@@ -55,6 +56,7 @@ function createServer(ctx: RequestContext): McpServer {
   registerWriteTaskMemory(server, ctx)
   registerDeleteTaskMemory(server, ctx)
   registerClearTaskMemory(server, ctx)
+  registerUpdateChecklistItem(server, ctx)
 
   return server
 }

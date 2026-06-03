@@ -3,6 +3,7 @@ import type {
   Task,
   TaskWithRelations,
   TaskDependency,
+  ChecklistItem,
   CreateTaskInput,
   UpdateTaskInput,
 } from '@/types/database'
@@ -19,21 +20,25 @@ const TASK_SELECT = `
   task_assignees(
     assignee:profiles!assignee_id(id, full_name, avatar_url)
   ),
+  task_checklist_items(id, title, is_done, position),
   comments(count),
   attachments(count)
 `
 
 function flattenTaskRow(row: Record<string, unknown>): TaskWithRelations {
-  const { task_tags, task_assignees, comments, attachments, ...rest } = row
+  const { task_tags, task_assignees, task_checklist_items, comments, attachments, ...rest } = row
   const tags = Array.isArray(task_tags)
     ? (task_tags as { tag: unknown }[]).map((tt) => tt.tag).filter(Boolean)
     : []
   const assignees = Array.isArray(task_assignees)
     ? (task_assignees as { assignee: unknown }[]).map((ta) => ta.assignee).filter(Boolean)
     : []
+  const checklist_items = Array.isArray(task_checklist_items)
+    ? (task_checklist_items as ChecklistItem[]).sort((a, b) => a.position - b.position)
+    : []
   const comment_count = Array.isArray(comments) ? (comments[0] as { count: number })?.count ?? 0 : 0
   const attachment_count = Array.isArray(attachments) ? (attachments[0] as { count: number })?.count ?? 0 : 0
-  return { ...rest, tags, assignees, dependencies: [], comment_count, attachment_count } as unknown as TaskWithRelations
+  return { ...rest, tags, assignees, dependencies: [], checklist_items, comment_count, attachment_count } as unknown as TaskWithRelations
 }
 
 async function fetchDependenciesForTasks(

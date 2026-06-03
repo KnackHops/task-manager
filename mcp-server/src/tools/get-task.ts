@@ -28,7 +28,8 @@ export function registerGetTask(server: McpServer, ctx: RequestContext) {
             project:projects!project_id(id, name, slug, prefix),
             comments(count),
             task_memory(count),
-            attachments(id, file_name, file_type, file_size)
+            attachments(id, file_name, file_type, file_size),
+            task_checklist_items(id, title, is_done, position)
           `)
           .eq('id', taskUUID)
           .single()
@@ -90,6 +91,21 @@ export function registerGetTask(server: McpServer, ctx: RequestContext) {
         lines.push('')
         lines.push('## Description')
         lines.push(t.description || '_No description provided._')
+
+        // Checklist
+        const checklistItems = (t.task_checklist_items ?? []) as { id: string; title: string; is_done: boolean; position: number }[]
+        if (checklistItems.length > 0) {
+          checklistItems.sort((a, b) => a.position - b.position)
+          const done = checklistItems.filter((i) => i.is_done).length
+          lines.push('')
+          lines.push(`## Checklist (${done}/${checklistItems.length})`)
+          for (const item of checklistItems) {
+            const check = item.is_done ? 'x' : ' '
+            lines.push(`- [${check}] ${item.title} (id: \`${item.id}\`)`)
+          }
+          lines.push('')
+          lines.push('_Use update_checklist_item with an item ID to toggle completion or edit title._')
+        }
 
         // Attachments
         if (attachments.length > 0) {

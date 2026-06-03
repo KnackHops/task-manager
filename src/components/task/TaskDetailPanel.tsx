@@ -20,13 +20,13 @@ import { useMembers } from "@/hooks/useMembers";
 import { useProjectContext } from "@/contexts/ProjectContext";
 import { CommentList } from "@/components/comment/CommentList";
 import { AttachmentList } from "@/components/attachment/AttachmentList";
-import { useUploadAttachment, useTaskAttachments, attachmentKeys } from "@/hooks/useAttachments";
-import { useQueryClient } from "@tanstack/react-query";
+import { ChecklistSection } from "@/components/task/ChecklistSection";
+import { useUploadAttachment, useTaskAttachments } from "@/hooks/useAttachments";
 import { useAuth } from "@/contexts/AuthContext";
 import { parseBody, getFirstName } from "@/lib/mentions";
-import { extractClipboardFiles, isImageType, FILE_SIZE_LIMIT, formatFileSize } from "@/lib/file-utils";
-import { extractRawBody, handleEditorBackspace, insertPastedImage, handleAttachmentDrop, populateEditorFromBody, type AttachmentDropData } from "@/lib/rich-editor";
-import { copyAttachment } from "@/services/attachments";
+import { FILE_SIZE_LIMIT, formatFileSize } from "@/lib/file-utils";
+import { replaceInlineTempId, removeInlineTempId } from "@/lib/rich-editor";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { InlineCommentImage } from "@/components/comment/InlineCommentImage";
 import { InlineFileLink } from "@/components/comment/InlineFileLink";
 import { MentionPopover } from "@/components/comment/MentionPopover";
@@ -63,7 +63,6 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
   const { data: members } = useMembers(projectId);
   const { user } = useAuth();
   const { data: taskTotalSeconds } = useTaskTotal(user?.id, taskId);
-  const queryClient = useQueryClient();
   const uploadAttachment = useUploadAttachment(taskId);
   const { data: taskAttachments } = useTaskAttachments(taskId);
 
@@ -76,9 +75,8 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
     const saved = localStorage.getItem("taskDetailPanelDetailsOpen");
     return saved === null ? true : saved === "true";
   });
-  const descEditorRef = useRef<HTMLDivElement>(null);
+  const [descRaw, setDescRaw] = useState('');
   const inlineImagesRef = useRef<Map<string, File>>(new Map());
-  const droppedExistingRef = useRef<Map<string, AttachmentDropData>>(new Map());
   const commentFormNodeRef = useRef<HTMLDivElement | null>(null);
   const scrollWrapperRef = useRef<HTMLDivElement>(null);
   const roRef = useRef<ResizeObserver | null>(null);
@@ -120,49 +118,6 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
       setTitle(task.title);
     }
   }, [task]);
-
-  // All hooks must be above the early return
-  const handleDescPaste = useCallback(
-    (e: React.ClipboardEvent) => {
-      const files = extractClipboardFiles(e);
-      if (files.length === 0) return;
-      e.preventDefault();
-
-      const imageFiles = files.filter((f) => isImageType(f.type));
-      const otherFiles = files.filter((f) => !isImageType(f.type));
-
-      for (const imageFile of imageFiles) {
-        if (imageFile.size > FILE_SIZE_LIMIT) {
-          toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${imageFile.name}`);
-          continue;
-        }
-        insertPastedImage(imageFile, inlineImagesRef.current);
-      }
-
-      // Non-image files: upload directly as task attachments
-      if (user) {
-        for (const file of otherFiles) {
-          if (file.size > FILE_SIZE_LIMIT) {
-            toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${file.name}`);
-            continue;
-          }
-          uploadAttachment.mutate({ file, uploadedBy: user.id, target: { taskId } }, { onError: (err) => toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : "Unknown error"}`) });
-        }
-      }
-    },
-    [user, taskId, uploadAttachment],
-  );
-
-  const handleDescKeyDown = useCallback((e: React.KeyboardEvent) => {
-    handleEditorBackspace(e, inlineImagesRef.current);
-  }, []);
-
-  const handleDescDrop = useCallback(async (e: React.DragEvent) => {
-    const attData = await handleAttachmentDrop(e, () => {});
-    if (attData) {
-      droppedExistingRef.current.set(attData.id, attData);
-    }
-  }, []);
 
   // Early return for loading state — all hooks are above this
   if (isLoading || !task) {
@@ -217,30 +172,21 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
     }
   };
 
-  const startEditingDesc = async () => {
+  const startEditingDesc = () => {
+    setDescRaw(task.description ?? '');
     setIsEditingDesc(true);
-    inlineImagesRef.current.clear();
-    droppedExistingRef.current.clear();
-    requestAnimationFrame(async () => {
-      if (descEditorRef.current) {
-        await populateEditorFromBody(descEditorRef.current, task.description ?? "", taskAttachments ?? [], memberMap);
-        descEditorRef.current.focus();
-      }
-    });
   };
 
   const handleDescSave = async () => {
-    const el = descEditorRef.current;
-    if (!el || !user) {
+    if (!user) {
       setIsEditingDesc(false);
       return;
     }
 
     try {
-      let finalBody = extractRawBody(el).trim();
+      let finalBody = descRaw.trim();
 
       // Upload new inline images (temp → real)
-      const newAttachIds = new Set<string>();
       if (inlineImagesRef.current.size > 0) {
         for (const [tempId, file] of inlineImagesRef.current.entries()) {
           try {
@@ -249,63 +195,22 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
               uploadedBy: user.id,
               target: { taskId },
             });
-            finalBody = finalBody.replace(`![](${tempId})`, `![](${attachment.id})`);
-            newAttachIds.add(attachment.id);
+            finalBody = replaceInlineTempId(finalBody, tempId, attachment.id, file.name);
           } catch (err) {
             toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : "Unknown error"}`);
-            finalBody = finalBody.replace(`![](${tempId})`, "");
+            finalBody = removeInlineTempId(finalBody, tempId);
           }
         }
         finalBody = finalBody.trim();
       }
-
-      // Copy existing attachments dropped from other sources
-      if (droppedExistingRef.current.size > 0) {
-        for (const [origId, attData] of droppedExistingRef.current.entries()) {
-          try {
-            const copied = await copyAttachment(attData.storagePath, user.id, attData.fileName, attData.fileType, attData.fileSize ?? 0, { taskId });
-            finalBody = finalBody.split(`![](${origId})`).join(`![](${copied.id})`);
-            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join(`%[${attData.fileName}](${copied.id})`);
-            newAttachIds.add(copied.id);
-          } catch (err) {
-            toast.error(`Failed to copy ${attData.fileName}: ${err instanceof Error ? err.message : "Unknown error"}`);
-            finalBody = finalBody.split(`![](${origId})`).join("");
-            finalBody = finalBody.split(`%[${attData.fileName}](${origId})`).join("");
-          }
-        }
-        finalBody = finalBody.trim();
-        await queryClient.invalidateQueries({ queryKey: attachmentKeys.task(taskId) });
-      }
-
-      // Strip inline refs to deleted attachments
-      const currentAttachIds = new Set((taskAttachments ?? []).map((a) => a.id));
-      finalBody = finalBody.replace(/!\[\]\(([^)]+)\)/g, (match, id) => {
-        if (id.startsWith("temp-")) return match;
-        if (currentAttachIds.has(id)) return match;
-        if (newAttachIds.has(id)) return match;
-        if (droppedExistingRef.current.has(id)) return match;
-        return "";
-      });
-      finalBody = finalBody.replace(/%\[[^\]]*\]\(([^)]+)\)/g, (match, id) => {
-        if (currentAttachIds.has(id)) return match;
-        if (newAttachIds.has(id)) return match;
-        if (droppedExistingRef.current.has(id)) return match;
-        return "";
-      });
-      finalBody = finalBody.trim();
 
       if (finalBody !== (task.description ?? "")) {
         handleFieldUpdate("description", finalBody || null);
       }
     } finally {
       inlineImagesRef.current.clear();
-      droppedExistingRef.current.clear();
       setIsEditingDesc(false);
     }
-  };
-
-  const handleDescBlur = () => {
-    handleDescSave();
   };
 
   const handleDelete = () => {
@@ -458,7 +363,24 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
           <div>
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</label>
             {isEditingDesc ? (
-              <div key="desc-editor" ref={descEditorRef} contentEditable onBlur={handleDescBlur} onPaste={handleDescPaste} onKeyDown={handleDescKeyDown} onDrop={handleDescDrop} onDragOver={(e) => e.preventDefault()} className="mt-1 w-full min-h-[200px] max-h-64 overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset [&_img]:max-w-full [&_img]:rounded-lg" />
+              <RichTextEditor
+                content={descRaw}
+                onChange={setDescRaw}
+                onBlur={handleDescSave}
+                placeholder="Describe the task..."
+                members={members ?? []}
+                onImagePaste={(file) => {
+                  if (file.size > FILE_SIZE_LIMIT) {
+                    toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${file.name}`);
+                    return null;
+                  }
+                  const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                  inlineImagesRef.current.set(tempId, file);
+                  return tempId;
+                }}
+                minHeight="200px"
+                className="mt-1"
+              />
             ) : (
               <div
                 key="desc-read"
@@ -484,8 +406,24 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
                       <InlineCommentImage key={i} attachmentId={seg.attachmentId} attachments={taskAttachments ?? []} />
                     ) : seg.type === "file_link" ? (
                       <InlineFileLink key={i} attachmentId={seg.attachmentId} fileName={seg.fileName} attachments={taskAttachments ?? []} />
+                    ) : seg.type === "bold" ? (
+                      <strong key={i} className="font-semibold">{seg.value}</strong>
+                    ) : seg.type === "italic" ? (
+                      <em key={i}>{seg.value}</em>
+                    ) : seg.type === "strike" ? (
+                      <s key={i} className="text-muted-foreground">{seg.value}</s>
+                    ) : seg.type === "code" ? (
+                      <code key={i} className="rounded bg-muted px-1 py-0.5 text-xs font-mono">{seg.value}</code>
+                    ) : seg.type === "link" ? (
+                      <a key={i} href={seg.href} target="_blank" rel="noopener noreferrer" className="text-primary underline">{seg.text}</a>
+                    ) : seg.type === "list" ? (
+                      seg.ordered ? (
+                        <ol key={i} className="list-decimal pl-5 my-1">{seg.items.map((item, j) => <li key={j}>{item}</li>)}</ol>
+                      ) : (
+                        <ul key={i} className="list-disc pl-5 my-1">{seg.items.map((item, j) => <li key={j}>{item}</li>)}</ul>
+                      )
                     ) : (
-                      <span key={i}>{seg.value}</span>
+                      <span key={i}>{'value' in seg ? seg.value : ''}</span>
                     ),
                   )
                 ) : (
@@ -494,6 +432,14 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
               </div>
             )}
           </div>
+
+          {/* Checklist */}
+          <ChecklistSection
+            taskId={taskId}
+            projectId={project.id}
+            items={task.checklist_items ?? []}
+            canEdit={canEditTask}
+          />
 
           {/* Attachments */}
           <div>
