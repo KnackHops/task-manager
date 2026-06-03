@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import type { DropResult } from '@hello-pangea/dnd'
 import { useTasks, useReorderTask, taskKeys } from '@/hooks/useTasks'
@@ -89,6 +90,11 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
     )
       return
 
+    // Cancel any in-flight task refetch (e.g. a window-focus refetch) so it
+    // can't resolve after the optimistic move and clobber it with stale,
+    // pre-move data — which would snap the card back to its origin column.
+    queryClient.cancelQueries({ queryKey: taskKeys.all(projectId) })
+
     // Auto-assign sprint when dragging into sprint column
     const isMovingIntoSprintColumn =
       project.sprint_column_id &&
@@ -114,12 +120,19 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
           ? { is_done: false as const, done_at: null }
           : undefined
 
-    setPendingReorder({
-      taskId: draggableId,
-      fromColumnId: source.droppableId,
-      toColumnId: destination.droppableId,
-      toIndex: destination.index,
-      isDoneOverride,
+    // flushSync so the optimistic move is committed to the DOM synchronously,
+    // BEFORE @hello-pangea/dnd reads positions for its drop animation. Without
+    // it, React 18 batches this state update until after handleDragEnd returns,
+    // so the library briefly animates the card back to its origin column before
+    // React commits the move — the post-drop flicker.
+    flushSync(() => {
+      setPendingReorder({
+        taskId: draggableId,
+        fromColumnId: source.droppableId,
+        toColumnId: destination.droppableId,
+        toIndex: destination.index,
+        isDoneOverride,
+      })
     })
 
     // Also update React Query cache so data persists after pendingReorder clears
@@ -182,8 +195,12 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
         isDoneOverride,
       },
       {
-        onSettled: () => {
-          queryClient.invalidateQueries({ queryKey: taskKeys.all(projectId) })
+        onSettled: async () => {
+          // Await the refetch BEFORE clearing the optimistic overlay, so the
+          // card stays in its new column until fresh server data is in cache.
+          // Clearing first leaves a window where a not-yet-resolved refetch
+          // renders stale order = flicker.
+          await queryClient.invalidateQueries({ queryKey: taskKeys.all(projectId) })
           setPendingReorder(null)
         },
       }

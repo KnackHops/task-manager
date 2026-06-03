@@ -6,6 +6,7 @@ import { PriorityBadge, TagBadge } from '@/components/ui/Badge'
 import { TaskNumberPill } from '@/components/ui/TaskNumberPill'
 import { Avatar } from '@/components/ui/Avatar'
 import { TaskTimerButton } from '@/components/task/TaskTimerButton'
+import { TaskTimeDisplay } from '@/components/task/TaskTimeDisplay'
 import { useUpdateTask } from '@/hooks/useTasks'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import type { TaskWithRelations } from '@/types/database'
@@ -16,10 +17,12 @@ const PRIORITIES: Priority[] = ['critical', 'high', 'medium', 'low']
 interface TaskListRowProps {
   task: TaskWithRelations
   index: number
+  /** This user's closed-session seconds on the task; the running clock is added live. */
+  seconds?: number
   onClick: (taskId: string) => void
 }
 
-export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
+export function TaskListRow({ task, index, seconds = 0, onClick }: TaskListRowProps) {
   const { project, columns, doneColumnIds, canEditTask } = useProjectContext()
   const updateTask = useUpdateTask(project.id)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -261,6 +264,10 @@ export function TaskListRow({ task, index, onClick }: TaskListRowProps) {
               {columns.find((c) => c.id === task.column_id)?.name}
             </span>
           )}
+
+          <div className="flex w-[68px] shrink-0 justify-end text-xs">
+            <TaskTimeDisplay taskId={task.id} baseSeconds={seconds} />
+          </div>
 
           <TaskTimerButton taskId={task.id} className="shrink-0" />
         </div>

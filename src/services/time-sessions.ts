@@ -107,6 +107,9 @@ export async function getProjectTaskSeconds(
   const map: Record<string, number> = {}
   for (const s of data ?? []) {
     const row = s as { task_id: string; started_at: string; ended_at: string | null }
+    // Closed sessions only. The open (running) session is added live in the UI
+    // from the running-session query, so excluding it here avoids double-counting.
+    if (row.ended_at == null) continue
     map[row.task_id] = (map[row.task_id] ?? 0) + elapsedSeconds(row.started_at, row.ended_at)
   }
   return map

@@ -91,22 +91,37 @@ export async function resolveTaskId(supabase: SupabaseClient, taskId: string): P
   const parsed = parseTaskId(taskId)
   if (!parsed) throw new Error(`Invalid task ID format: "${taskId}". Use NT-1 format or UUID.`)
 
-  const { data: project, error: projectError } = await supabase
+  // Prefixes are NOT unique — resolve against every project the user can see
+  // that carries this prefix. RLS limits the result to the user's projects.
+  const { data: projects } = await supabase
     .from('projects')
-    .select('id')
+    .select('id, slug, name')
     .eq('prefix', parsed.prefix)
-    .single()
-  if (projectError) throw new Error(`No project with prefix "${parsed.prefix}"`)
+  if (!projects || projects.length === 0) {
+    throw new Error(`No project with prefix "${parsed.prefix}"`)
+  }
 
-  const { data: task, error: taskError } = await supabase
+  const { data: tasks } = await supabase
     .from('tasks')
-    .select('id')
-    .eq('project_id', project.id)
+    .select('id, project_id')
+    .in('project_id', projects.map((p) => p.id))
     .eq('task_number', parsed.number)
-    .single()
-  if (taskError) throw new Error(`Task ${taskId} not found`)
+  if (!tasks || tasks.length === 0) {
+    throw new Error(`Task ${taskId} not found`)
+  }
+  if (tasks.length === 1) return tasks[0]!.id
 
-  return task.id
+  // Collision: the same prefix-number exists in multiple projects. Surface the
+  // candidates with their UUIDs so the caller can re-run against the right one.
+  const byProject = new Map(projects.map((p) => [p.id, p]))
+  const lines = tasks.map((t) => {
+    const p = byProject.get(t.project_id) as { slug: string; name: string } | undefined
+    return `  • ${p?.name ?? 'Unknown'} (${p?.slug ?? '?'}) → ${t.id}`
+  })
+  throw new Error(
+    `"${taskId}" is ambiguous — it exists in multiple projects. ` +
+      `Re-run with the specific task UUID:\n${lines.join('\n')}`,
+  )
 }
 
 // ── Formatting ──────────────────────────────────────────────────────

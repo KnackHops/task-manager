@@ -1,4 +1,4 @@
--- Migration 026: Auto-assign a task-ID prefix on project creation
+-- Migration 026: Auto project prefixes + permanent prefix registry
 -- Run this in Supabase Studio SQL Editor.
 --
 -- Context: create_project_with_defaults (migration 002) predates the
@@ -7,19 +7,56 @@
 -- task IDs in the UI and make tasks unaddressable via the MCP server
 -- (resolveTaskId parses "PREFIX-N" and looks projects up by prefix).
 --
+-- A task's human-readable ID is derived (prefix + task_number), not stored, so
+-- renaming a prefix changes every displayed ID. Worse, a freed-up prefix could
+-- be reused by a new project, silently misrouting old references. To prevent
+-- that, this migration keeps a PERMANENT, globally-unique registry of every
+-- prefix any project has ever held. A prefix is reserved forever: no other
+-- project can take it, and old IDs always resolve to the correct project.
+--
 -- This migration:
---   1. Adds a helper that derives a unique prefix from a project name.
---   2. Rewrites create_project_with_defaults to use it.
---   3. Backfills existing prefixless projects.
+--   1. Creates the prefix registry (+ RLS).
+--   2. Adds a helper that derives a globally-unique prefix from a name.
+--   3. Keeps the registry in sync + blocks cross-project reuse (trigger).
+--   4. Rewrites create_project_with_defaults to assign a prefix.
+--   5. Backfills existing prefixless projects (which populates the registry).
 
 -- =============================================
--- 1. Prefix derivation helper
+-- 1. Permanent prefix registry
+-- =============================================
+-- One row per (prefix) ever owned by a project. prefix is the PK, so it is
+-- globally unique across current AND retired prefixes. Rows are never deleted
+-- on rename, so historical IDs keep resolving to the right project.
+create table if not exists public.project_prefix_registry (
+  prefix text primary key,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_prefix_registry_project
+  on public.project_prefix_registry (project_id);
+
+-- RLS — project members may read the registry (MCP runs user-scoped).
+alter table public.project_prefix_registry enable row level security;
+
+drop policy if exists "prefix_registry_select" on public.project_prefix_registry;
+create policy "prefix_registry_select" on public.project_prefix_registry for select using (
+  exists (
+    select 1 from public.project_members
+    where project_id = project_prefix_registry.project_id
+      and user_id = auth.uid()
+  )
+);
+-- No insert/update/delete policies: rows are written only by the trigger below
+-- (SECURITY DEFINER), never directly by clients.
+
+-- =============================================
+-- 2. Prefix derivation helper (globally unique vs the registry)
 -- =============================================
 -- Rules: initials of each word (e.g. "Task Manager" -> "TM"); for a single
 -- word, the first 3 letters ("Backend" -> "BAC"). Capped at 4 chars, uppercased,
--- alphanumerics only. Falls back to the slug, then 'PRJ'. Guarantees global
--- uniqueness (MCP resolves a task's project by prefix) by appending a counter.
-
+-- alphanumerics only. Falls back to the slug, then 'PRJ'. Appends a counter
+-- until the candidate is unused by ANY project, past or present.
 create or replace function public.derive_project_prefix(p_name text, p_slug text)
 returns text as $$
 declare
@@ -62,9 +99,9 @@ begin
 
   v_base := upper(left(v_base, 4));
 
-  -- Ensure global uniqueness
+  -- Reserve-forever: never reuse a prefix any project has ever held.
   v_prefix := v_base;
-  while exists (select 1 from public.projects where prefix = v_prefix) loop
+  while exists (select 1 from public.project_prefix_registry where prefix = v_prefix) loop
     v_prefix := v_base || v_suffix::text;
     v_suffix := v_suffix + 1;
   end loop;
@@ -74,7 +111,40 @@ end;
 $$ language plpgsql;
 
 -- =============================================
--- 2. Rewrite create_project_with_defaults to set the prefix
+-- 3. Keep registry in sync + block cross-project reuse
+-- =============================================
+-- Fires when a project is created or its prefix changes. Rejects a prefix
+-- already reserved by a DIFFERENT project; otherwise records it (old prefixes
+-- stay registered, so their IDs keep resolving to this project).
+create or replace function public.sync_prefix_registry()
+returns trigger as $$
+begin
+  if coalesce(NEW.prefix, '') = '' then
+    return NEW;
+  end if;
+
+  if exists (
+    select 1 from public.project_prefix_registry
+    where prefix = NEW.prefix and project_id <> NEW.id
+  ) then
+    raise exception 'Prefix "%" is already reserved by another project', NEW.prefix;
+  end if;
+
+  insert into public.project_prefix_registry (prefix, project_id)
+  values (NEW.prefix, NEW.id)
+  on conflict (prefix) do nothing;
+
+  return NEW;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_sync_prefix_registry on public.projects;
+create trigger trg_sync_prefix_registry
+  after insert or update of prefix on public.projects
+  for each row execute function public.sync_prefix_registry();
+
+-- =============================================
+-- 4. Rewrite create_project_with_defaults to set the prefix
 -- =============================================
 create or replace function public.create_project_with_defaults(
   p_name text,
@@ -84,7 +154,8 @@ create or replace function public.create_project_with_defaults(
 declare
   v_project_id uuid;
 begin
-  -- Insert project (with auto-derived prefix)
+  -- Insert project (with auto-derived, globally-unique prefix).
+  -- The AFTER-INSERT trigger records it in the registry.
   insert into public.projects (name, slug, created_by, prefix)
   values (p_name, p_slug, p_user_id, public.derive_project_prefix(p_name, p_slug))
   returning id into v_project_id;
@@ -119,10 +190,11 @@ end;
 $$ language plpgsql security definer;
 
 -- =============================================
--- 3. Backfill existing prefixless projects
+-- 5. Backfill existing prefixless projects
 -- =============================================
 -- Assigns a derived, unique prefix to every project that still has ''.
 -- Processed oldest-first so existing projects get the cleaner short prefix.
+-- The UPDATE fires the sync trigger, which populates the registry.
 do $$
 declare
   r record;
@@ -137,13 +209,11 @@ begin
     set prefix = public.derive_project_prefix(r.name, r.slug)
     where id = r.id;
   end loop;
-end $$;
 
--- =============================================
--- 4. Enforce prefix uniqueness (MCP resolves project by prefix)
--- =============================================
--- Partial index so any legacy/empty prefixes are exempt, but every real
--- prefix must be unique. A Settings edit to a taken prefix will now error.
-create unique index if not exists projects_prefix_unique
-  on public.projects (prefix)
-  where prefix <> '';
+  -- Register any pre-existing non-empty prefixes that the trigger didn't see
+  -- (rows present before this migration). Safe: skips ones already registered.
+  insert into public.project_prefix_registry (prefix, project_id)
+  select prefix, id from public.projects
+  where coalesce(prefix, '') <> ''
+  on conflict (prefix) do nothing;
+end $$;
