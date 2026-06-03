@@ -70,9 +70,17 @@ export function TaskCard({ task, index, onClick }: TaskCardProps) {
           {task.dependencies && task.dependencies.length > 0 && (
             <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
               <GitMerge className={cn('h-3 w-3 shrink-0', task.dependencies.every((d) => d.is_done) && 'text-emerald-500')} />
-              {task.dependencies.map((d) => (
+              {task.dependencies.slice(0, 3).map((d) => (
                 <span key={d.id} className={cn(d.is_done && 'text-emerald-500')}>{formatTaskRef(project.prefix, d.task_number)}</span>
               ))}
+              {task.dependencies.length > 3 && (
+                <span
+                  className="cursor-pointer"
+                  title={task.dependencies.slice(3).map((d) => formatTaskRef(project.prefix, d.task_number)).join(', ')}
+                >
+                  +{task.dependencies.length - 3}
+                </span>
+              )}
             </div>
           )}
 

@@ -151,6 +151,18 @@ export function TaskListRow({ task, index, seconds = 0, onClick }: TaskListRowPr
               >
                 {task.title}
               </span>
+              {task.tags && task.tags.length > 0 && (
+                <div className="hidden shrink-0 items-center gap-1 sm:flex">
+                  {task.tags.slice(0, 2).map((tag) => (
+                    <TagBadge key={tag.id} name={tag.name} color={tag.color} />
+                  ))}
+                  {task.tags.length > 2 && (
+                    <span className="text-[10px] text-muted-foreground">
+                      +{task.tags.length - 2}
+                    </span>
+                  )}
+                </div>
+              )}
               {canEditTask && (
                 <button
                   onClick={startEdit}
@@ -162,18 +174,6 @@ export function TaskListRow({ task, index, seconds = 0, onClick }: TaskListRowPr
               )}
             </div>
           )}
-
-          {/* Tags (fixed slot, aligned column) */}
-          <div className="hidden w-[150px] shrink-0 items-center gap-1 overflow-hidden md:flex">
-            {task.tags?.slice(0, 2).map((tag) => (
-              <TagBadge key={tag.id} name={tag.name} color={tag.color} />
-            ))}
-            {task.tags && task.tags.length > 2 && (
-              <span className="text-[10px] text-muted-foreground">
-                +{task.tags.length - 2}
-              </span>
-            )}
-          </div>
 
           {/* Activity column: counts · points · assignees (right-aligned, fixed slot) */}
           <div className="hidden w-[92px] shrink-0 items-center justify-end gap-2 sm:flex">
@@ -221,11 +221,19 @@ export function TaskListRow({ task, index, seconds = 0, onClick }: TaskListRowPr
 
           {/* Dependencies */}
           {task.dependencies && task.dependencies.length > 0 && (
-            <div className="hidden shrink-0 items-center gap-1 overflow-hidden text-[11px] text-muted-foreground md:flex">
+            <div className="hidden shrink-0 items-center gap-1 whitespace-nowrap text-[11px] text-muted-foreground md:flex">
               <GitMerge className={cn('h-3 w-3 shrink-0', task.dependencies.every((d) => d.is_done) && 'text-emerald-500')} />
-              {task.dependencies.map((d) => (
+              {task.dependencies.slice(0, 3).map((d) => (
                 <span key={d.id} className={cn(d.is_done && 'text-emerald-500')}>{formatTaskRef(project.prefix, d.task_number)}</span>
               ))}
+              {task.dependencies.length > 3 && (
+                <span
+                  className="cursor-pointer text-muted-foreground"
+                  title={task.dependencies.slice(3).map((d) => formatTaskRef(project.prefix, d.task_number)).join(', ')}
+                >
+                  +{task.dependencies.length - 3}
+                </span>
+              )}
             </div>
           )}
 
