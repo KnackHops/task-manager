@@ -86,6 +86,8 @@ export function CreateTaskDialog({
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const [checklistItems, setChecklistItems] = useState<string[]>([])
   const [newChecklistTitle, setNewChecklistTitle] = useState('')
+  const [editingChecklistIndex, setEditingChecklistIndex] = useState<number | null>(null)
+  const [editingChecklistDraft, setEditingChecklistDraft] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -343,7 +345,35 @@ export function CreateTaskDialog({
                               <GripVertical className="h-3.5 w-3.5" />
                             </div>
                             <div className="h-4 w-4 rounded border border-border shrink-0" />
-                            <span className="flex-1 min-w-0 truncate">{item}</span>
+                            {editingChecklistIndex === i ? (
+                              <input
+                                autoFocus
+                                value={editingChecklistDraft}
+                                onChange={(e) => setEditingChecklistDraft(e.target.value)}
+                                onBlur={() => {
+                                  const trimmed = editingChecklistDraft.trim()
+                                  if (trimmed) {
+                                    setChecklistItems((prev) => prev.map((v, idx) => idx === i ? trimmed : v))
+                                  }
+                                  setEditingChecklistIndex(null)
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                                  if (e.key === 'Escape') setEditingChecklistIndex(null)
+                                }}
+                                className="min-w-0 flex-1 rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                            ) : (
+                              <span
+                                className="flex-1 min-w-0 wrap-break-word cursor-default"
+                                onDoubleClick={() => {
+                                  setEditingChecklistDraft(item)
+                                  setEditingChecklistIndex(i)
+                                }}
+                              >
+                                {item}
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={() => setChecklistItems((prev) => prev.filter((_, idx) => idx !== i))}
