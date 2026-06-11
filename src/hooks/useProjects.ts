@@ -5,6 +5,8 @@ import {
   createProject,
   updateProject,
   deleteProject,
+  deactivateProject,
+  reactivateProject,
 } from '@/services/projects'
 import { useAuth } from '@/contexts/AuthContext'
 import type { UpdateProjectInput } from '@/types/database'
@@ -61,11 +63,33 @@ export function useUpdateProject(slug: string) {
   })
 }
 
-export function useDeleteProject() {
+export function useDeactivateProject() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   return useMutation({
-    mutationFn: (projectId: string) => deleteProject(projectId, user!.id),
+    mutationFn: (projectId: string) => deactivateProject(projectId, user!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.all })
+    },
+  })
+}
+
+export function useReactivateProject(slug: string) {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  return useMutation({
+    mutationFn: (projectId: string) => reactivateProject(projectId, user!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.all })
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(slug) })
+    },
+  })
+}
+
+export function useDeleteProject() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (projectId: string) => deleteProject(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.all })
     },

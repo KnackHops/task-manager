@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { LogOut, ArrowRightLeft, Trash2, AlertTriangle } from 'lucide-react'
+import { LogOut, ArrowRightLeft, Trash2, AlertTriangle, Pause } from 'lucide-react'
 import { useLeaveProject, useTransferOwnership } from '@/hooks/useMembers'
-import { useDeleteProject } from '@/hooks/useProjects'
+import { useDeactivateProject, useDeleteProject } from '@/hooks/useProjects'
 import { Avatar } from '@/components/ui/Avatar'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { ProjectMemberWithProfile } from '@/types/database'
@@ -12,17 +12,20 @@ interface DangerZoneProps {
   projectId: string
   projectName: string
   isOwner: boolean
+  isDeactivated: boolean
   activeMembers: ProjectMemberWithProfile[]
 }
 
-export function DangerZone({ projectId, projectName, isOwner, activeMembers }: DangerZoneProps) {
+export function DangerZone({ projectId, projectName, isOwner, isDeactivated, activeMembers }: DangerZoneProps) {
   const leave = useLeaveProject(projectId)
   const transfer = useTransferOwnership(projectId)
+  const deactivate = useDeactivateProject()
   const deleteProject = useDeleteProject()
   const navigate = useNavigate()
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [transferTarget, setTransferTarget] = useState<ProjectMemberWithProfile | null>(null)
+  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const activeNonOwners = activeMembers.filter((m) => m.role !== 'owner')
@@ -48,10 +51,20 @@ export function DangerZone({ projectId, projectName, isOwner, activeMembers }: D
     })
   }
 
+  const handleDeactivate = () => {
+    deactivate.mutate(projectId, {
+      onSuccess: () => {
+        toast.success('Project deactivated')
+        navigate({ to: '/projects' })
+      },
+      onError: (err) => toast.error(err.message),
+    })
+  }
+
   const handleDelete = () => {
     deleteProject.mutate(projectId, {
       onSuccess: () => {
-        toast.success('Project deleted')
+        toast.success('Project permanently deleted')
         navigate({ to: '/projects' })
       },
       onError: (err) => toast.error(err.message),
@@ -66,8 +79,8 @@ export function DangerZone({ projectId, projectName, isOwner, activeMembers }: D
       </div>
 
       <div className="space-y-4">
-        {/* Transfer Ownership — owner only */}
-        {isOwner && activeNonOwners.length > 0 && (
+        {/* Transfer Ownership — owner only, active project only */}
+        {isOwner && !isDeactivated && activeNonOwners.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-1">
               <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
@@ -91,13 +104,32 @@ export function DangerZone({ projectId, projectName, isOwner, activeMembers }: D
           </div>
         )}
 
-        {/* Delete Project — owner only */}
-        {isOwner && (
+        {/* Deactivate Project — owner only, active project */}
+        {isOwner && !isDeactivated && (
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-medium text-foreground">Delete Project</h4>
+              <h4 className="text-sm font-medium text-foreground">Deactivate Project</h4>
               <p className="text-xs text-muted-foreground">
-                Permanently delete this project and all its data.
+                Remove all members and deactivate. You can reactivate or permanently delete later.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowDeactivateConfirm(true)}
+              className="flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
+            >
+              <Pause className="h-3.5 w-3.5" />
+              Deactivate
+            </button>
+          </div>
+        )}
+
+        {/* Permanently Delete — owner only, deactivated project only */}
+        {isOwner && isDeactivated && (
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-medium text-foreground">Permanently Delete</h4>
+              <p className="text-xs text-muted-foreground">
+                Permanently delete this project and all its data. This cannot be undone.
               </p>
             </div>
             <button
@@ -105,7 +137,7 @@ export function DangerZone({ projectId, projectName, isOwner, activeMembers }: D
               className="flex items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 transition-colors"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Delete
+              Delete Forever
             </button>
           </div>
         )}
@@ -152,12 +184,22 @@ export function DangerZone({ projectId, projectName, isOwner, activeMembers }: D
       />
 
       <ConfirmDialog
+        open={showDeactivateConfirm}
+        onClose={() => setShowDeactivateConfirm(false)}
+        onConfirm={handleDeactivate}
+        title="Deactivate Project"
+        description={`Deactivate "${projectName}"? All members except you will be removed. You can reactivate or permanently delete later.`}
+        confirmLabel="Deactivate"
+        isPending={deactivate.isPending}
+      />
+
+      <ConfirmDialog
         open={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
-        title="Delete Project"
-        description={`Permanently delete "${projectName}" and all its tasks, columns, and data? All members will be notified. This cannot be undone.`}
-        confirmLabel="Delete"
+        title="Permanently Delete Project"
+        description={`Permanently delete "${projectName}" and all its tasks, columns, and data? This cannot be undone.`}
+        confirmLabel="Delete Forever"
         isPending={deleteProject.isPending}
       />
     </div>

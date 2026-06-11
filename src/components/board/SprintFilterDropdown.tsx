@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
+import { parseISO, format } from 'date-fns'
 import { ChevronDown, Plus, Check, X, Circle, Calendar, Play, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCreateSprint, useUpdateSprint } from '@/hooks/useSprints'
@@ -29,10 +30,7 @@ function getDefaultDates(durationDays: number) {
 }
 
 function formatDateShort(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  })
+  return format(parseISO(dateStr), 'MMM d')
 }
 
 export interface SprintFilterDropdownHandle {

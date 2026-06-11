@@ -31,6 +31,7 @@ export interface Project {
   created_by: string | null
   route_manifest: RouteManifestEntry[]
   default_sprint_days: number
+  deactivated_at: string | null
   created_at: string
 }
 

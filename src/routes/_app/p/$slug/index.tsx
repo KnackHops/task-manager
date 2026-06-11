@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { parseISO, format } from 'date-fns'
 import { toast } from 'sonner'
 import { Plus, Star, Play, CheckCircle2, ListPlus, Loader2, LayoutGrid, List, UserCheck } from 'lucide-react'
 import { useIsFetching } from '@tanstack/react-query'
@@ -29,11 +30,7 @@ export const Route = createFileRoute('/_app/p/$slug/')({
 })
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return format(parseISO(dateStr), 'MMM d, yyyy')
 }
 
 function BoardPage() {

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { parseISO, format } from 'date-fns'
 import { toast } from 'sonner'
 import {
   Plus,
@@ -39,11 +40,7 @@ const STATUS_STYLES: Record<SprintStatus, string> = {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return format(parseISO(dateStr), 'MMM d, yyyy')
 }
 
 function getDefaultDates(durationDays: number) {

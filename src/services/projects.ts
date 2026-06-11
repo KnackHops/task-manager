@@ -25,7 +25,10 @@ export async function fetchMyProjects(
 
   if (error) throw error
 
-  const rows = data ?? []
+  const rows = (data ?? []).filter((r) => {
+    const project = r.project as unknown as Project
+    return !project.deactivated_at
+  })
   if (rows.length === 0) return []
 
   const projectIds = rows.map(
@@ -153,35 +156,25 @@ export async function updateProject(
   return data as Project
 }
 
-export async function deleteProject(projectId: string, deletedBy: string): Promise<void> {
-  // Fetch members + project info before cascade wipes everything
-  const [{ data: members }, { data: project }] = await Promise.all([
-    supabase
-      .from('project_members')
-      .select('user_id')
-      .eq('project_id', projectId)
-      .neq('user_id', deletedBy),
-    supabase
-      .from('projects')
-      .select('name, slug')
-      .eq('id', projectId)
-      .single(),
-  ])
+export async function deactivateProject(projectId: string, ownerId: string): Promise<void> {
+  const { error } = await supabase.rpc('deactivate_project', {
+    p_project_id: projectId,
+    p_owner_id: ownerId,
+  })
+  if (error) throw error
+}
 
-  // Notify all other members before deletion
-  if (members?.length && project) {
-    await supabase.from('notifications').insert(
-      members.map((m) => ({
-        user_id: m.user_id,
-        type: 'kick' as const,
-        task_id: null,
-        actor_id: deletedBy,
-        message: `"${project.name}" was deleted`,
-        project_slug: project.slug,
-      }))
-    )
-  }
+export async function reactivateProject(projectId: string, ownerId: string): Promise<void> {
+  const { error } = await supabase.rpc('reactivate_project', {
+    p_project_id: projectId,
+    p_owner_id: ownerId,
+  })
+  if (error) throw error
+}
 
+export async function deleteProject(projectId: string): Promise<void> {
+  // Permanent delete — only callable after deactivation (members already kicked).
+  // FKs on tasks/sprints are now CASCADE, so this cleans up everything.
   const { error } = await supabase
     .from('projects')
     .delete()

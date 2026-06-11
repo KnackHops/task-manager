@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { flushSync } from 'react-dom'
+import { parseISO, format } from 'date-fns'
 import { useQueryClient } from '@tanstack/react-query'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import { GripVertical, Calendar, Zap, MessageSquare, Paperclip } from 'lucide-react'
@@ -32,7 +33,7 @@ interface MyTasksViewProps {
 }
 
 function fmtDue(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return format(parseISO(iso), 'MMM d')
 }
 
 export function MyTasksView({ projectId, projectPrefix, activeSprint, onTaskClick }: MyTasksViewProps) {

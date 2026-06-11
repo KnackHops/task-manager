@@ -57,6 +57,7 @@ function ProjectSettingsPage() {
           projectId={project.id}
           projectName={project.name}
           isOwner={isOwner}
+          isDeactivated={!!project.deactivated_at}
           activeMembers={activeMembers ?? []}
         />
       </div>

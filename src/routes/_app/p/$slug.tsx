@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { createFileRoute, Outlet, useNavigate, Link, type ErrorComponentProps } from '@tanstack/react-router'
-import { useProject } from '@/hooks/useProjects'
+import { toast } from 'sonner'
+import { useProject, useReactivateProject, useDeleteProject } from '@/hooks/useProjects'
 import { ProjectProvider } from '@/contexts/ProjectContext'
 import { AppShell } from '@/components/layout/AppShell'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { AlertTriangle } from 'lucide-react'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { AlertTriangle, RotateCcw, Trash2 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/p/$slug')({
   component: ProjectLayout,
@@ -56,9 +59,73 @@ function ProjectLayout() {
   return (
     <ProjectProvider project={project}>
       <AppShell projectSlug={slug}>
-        <Outlet />
+        {project.deactivated_at ? <DeactivatedBanner slug={slug} project={project} /> : <Outlet />}
       </AppShell>
     </ProjectProvider>
+  )
+}
+
+function DeactivatedBanner({ slug, project }: { slug: string; project: { id: string; name: string; deactivated_at: string | null } }) {
+  const navigate = useNavigate()
+  const reactivate = useReactivateProject(slug)
+  const deleteProject = useDeleteProject()
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const handleReactivate = () => {
+    reactivate.mutate(project.id, {
+      onSuccess: () => toast.success('Project reactivated'),
+      onError: (err) => toast.error(err.message),
+    })
+  }
+
+  const handleDelete = () => {
+    deleteProject.mutate(project.id, {
+      onSuccess: () => {
+        toast.success('Project permanently deleted')
+        navigate({ to: '/projects' })
+      },
+      onError: (err) => toast.error(err.message),
+    })
+  }
+
+  return (
+    <>
+      <div className="mx-auto max-w-lg py-16">
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-6 text-center">
+          <AlertTriangle className="mx-auto h-10 w-10 text-amber-500 mb-4" />
+          <h2 className="text-lg font-bold text-foreground mb-2">Project Deactivated</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            "{project.name}" is deactivated. Reactivate to restore access, or permanently delete.
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={handleReactivate}
+              disabled={reactivate.isPending}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              <RotateCcw className="h-4 w-4" />
+              {reactivate.isPending ? 'Reactivating...' : 'Reactivate'}
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Forever
+            </button>
+          </div>
+        </div>
+      </div>
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Permanently Delete Project"
+        description={`Permanently delete "${project.name}" and all its tasks, columns, and data? This cannot be undone.`}
+        confirmLabel="Delete Forever"
+        isPending={deleteProject.isPending}
+      />
+    </>
   )
 }
 
