@@ -18,7 +18,7 @@
 ### Data Model
 
 ```
-projects (name, slug, prefix, default_column_id, created_by)
+projects (name, slug, prefix, default_column_id, deactivated_at, created_by)
   ──< project_columns (custom columns per project)
   ──< project_tags (custom tags per project)
   ──< project_members (membership + permissions)
@@ -1263,6 +1263,59 @@ search_tasks project=nonstop query="email template"   → search by text
 
 ---
 
+## PHASE 15.3: SOFT-DELETE PROJECTS + SPRINT DATE FIX ✅ COMPLETE
+
+> Two-part fix: (1) sprint dates showing one day behind for US timezone users, (2) project deletion blocked by FK RESTRICT — replaced with deactivate → reactivate/permanent-delete flow.
+
+### 15.3.1 Sprint Date Timezone Fix
+- [x] Root cause: `new Date('2026-06-08')` parses as midnight UTC, displays as previous day in UTC-negative timezones
+- [x] Fix: replaced `new Date(dateStr).toLocaleDateString(...)` with `parseISO` + `format` from date-fns (treats date-only strings as local dates)
+- [x] `src/components/board/SprintFilterDropdown.tsx` — `formatDateShort` → `format(parseISO(dateStr), 'MMM d')`
+- [x] `src/components/settings/SprintManager.tsx` — `formatDate` → `format(parseISO(dateStr), 'MMM d, yyyy')`
+- [x] `src/routes/_app/p/$slug/index.tsx` — `formatDate` → `format(parseISO(dateStr), 'MMM d, yyyy')`
+- [x] `src/components/board/MyTasksView.tsx` — `fmtDue` → `format(parseISO(iso), 'MMM d')`
+- [x] `SessionLog.tsx` unchanged — uses `timestamptz` strings (include timezone info), `new Date()` correct there
+
+### 15.3.2 Migration
+- [x] `supabase/migrations/030_soft_delete_projects.sql`
+  - `projects.deactivated_at timestamptz DEFAULT NULL`
+  - FK constraints changed from RESTRICT → CASCADE: `tasks.project_id`, `sprints.project_id` (unblocks permanent deletion)
+  - `deactivate_project(p_project_id, p_owner_id)` SECURITY DEFINER function — sets `deactivated_at`, kicks non-owner members, removes their task_assignees, sends `'kick'` notifications
+  - `reactivate_project(p_project_id, p_owner_id)` SECURITY DEFINER function — clears `deactivated_at`
+
+### 15.3.3 Types
+- [x] `src/types/database.ts` — `deactivated_at: string | null` added to `Project` interface
+
+### 15.3.4 Services
+- [x] `src/services/projects.ts` — `deactivateProject(projectId, ownerId)` → RPC `deactivate_project`
+- [x] `src/services/projects.ts` — `reactivateProject(projectId, ownerId)` → RPC `reactivate_project`
+- [x] `deleteProject` simplified (no member notification pre-fetch — members already kicked during deactivation)
+- [x] `fetchMyProjects` — filters out deactivated projects from list
+
+### 15.3.5 Hooks
+- [x] `src/hooks/useProjects.ts` — `useDeactivateProject()` mutation
+- [x] `src/hooks/useProjects.ts` — `useReactivateProject(slug)` mutation (invalidates project list + detail)
+- [x] `useDeleteProject` updated (no longer needs userId — members already gone)
+
+### 15.3.6 UI
+- [x] `src/components/settings/DangerZone.tsx` — new `isDeactivated` prop
+  - Active project: "Deactivate Project" button (amber, Pause icon) replaces old "Delete Project"
+  - Deactivated project: "Permanently Delete" button (red, Trash2 icon)
+  - Transfer Ownership hidden when deactivated
+- [x] `src/routes/_app/p/$slug.tsx` — `DeactivatedBanner` component
+  - Shows when `project.deactivated_at` is set (replaces `<Outlet>` rendering)
+  - Amber alert banner with "Reactivate" (primary) + "Delete Forever" (destructive) buttons
+  - ConfirmDialog for permanent deletion
+  - Rendered inside `ProjectProvider` + `AppShell`
+- [x] `src/routes/_app/p/$slug/settings.tsx` — passes `isDeactivated` prop to DangerZone
+- [x] Deactivated projects auto-hidden from: project list, sidebar, project switcher (via `fetchMyProjects` filter)
+
+### 15.3.7 Build Verification
+- [x] `npx tsc --noEmit` — passes clean
+- [x] `npm run build` — passes clean (tsc + vite)
+
+---
+
 ## FILE STRUCTURE (Current)
 
 ```
@@ -1286,7 +1339,7 @@ task-manager/
 │   │   ├── AuthContext.tsx
 │   │   └── ProjectContext.tsx
 │   ├── hooks/
-│   │   ├── useProjects.ts
+│   │   ├── useProjects.ts     # includes useDeactivateProject, useReactivateProject
 │   │   ├── useTasks.ts       # includes optimistic archive/unarchive/reorder/update
 │   │   ├── useColumns.ts
 │   │   ├── useTags.ts        # includes optimistic useSetTaskTags
@@ -1306,7 +1359,7 @@ task-manager/
 │   │   ├── useApiKeys.ts     # useApiKeys, useCreateApiKey, useRevokeApiKey
 │   │   └── useProfiles.ts    # useUpdateProfile, useUploadAvatar, useRemoveAvatar
 │   ├── services/
-│   │   ├── projects.ts
+│   │   ├── projects.ts       # includes deactivateProject, reactivateProject, deleteProject
 │   │   ├── tasks.ts          # fetchTasks/fetchTask with comment_count, attachment_count, checklist_items
 │   │   ├── columns.ts
 │   │   ├── tags.ts
@@ -1387,7 +1440,8 @@ task-manager/
 │       ├── 025_time_tracking.sql
 │       ├── 026_auto_project_prefix.sql
 │       ├── 028_relax_project_prefix.sql
-│       └── 029_task_checklists.sql
+│       ├── 029_task_checklists.sql
+│       └── 030_soft_delete_projects.sql
 ├── .env.example
 ├── .env.local
 ├── vite.config.ts
@@ -1431,7 +1485,7 @@ task-manager/
 | Table | Purpose |
 |-------|---------|
 | `profiles` | User profiles (auto-created on signup) |
-| `projects` | Projects (name, slug, prefix, default_column_id, sprint_column_id, default_sprint_days, auto_archive_done, created_by) |
+| `projects` | Projects (name, slug, prefix, default_column_id, sprint_column_id, default_sprint_days, auto_archive_done, deactivated_at, created_by) |
 | `project_columns` | Custom columns per project (name, slug, position, is_done) |
 | `project_members` | Membership + granular permissions (7 permission flags), invite status (pending/active), invited_by |
 | `project_tags` | Custom tags per project (name, slug, color) |

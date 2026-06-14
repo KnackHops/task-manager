@@ -1,14 +1,26 @@
 import { useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useUpdateProject } from '@/hooks/useProjects'
 import { useUpdateColumn } from '@/hooks/useColumns'
 import { useProjectContext } from '@/contexts/ProjectContext'
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
 export function ProjectGeneralSettings() {
   const { project, columns, doneColumnIds, isOwner } = useProjectContext()
   const updateProject = useUpdateProject(project.slug)
   const updateColumn = useUpdateColumn(project.id, project.slug)
+  const navigate = useNavigate()
 
+  const [name, setName] = useState(project.name)
+  const [slug, setSlug] = useState(project.slug)
+  const [slugEdited, setSlugEdited] = useState(false)
   const [prefix, setPrefix] = useState(project.prefix)
   const [defaultColumnId, setDefaultColumnId] = useState(
     project.default_column_id ?? ''
@@ -26,7 +38,21 @@ export function ProjectGeneralSettings() {
   const currentDoneColumnId = doneColumnIds.length > 0 ? doneColumnIds[0] : ''
   const [completedColumnId, setCompletedColumnId] = useState(currentDoneColumnId)
 
+  const handleNameChange = (val: string) => {
+    setName(val)
+    if (!slugEdited) {
+      setSlug(slugify(val))
+    }
+  }
+
+  const handleSlugChange = (val: string) => {
+    setSlugEdited(true)
+    setSlug(slugify(val))
+  }
+
   const hasChanges =
+    name !== project.name ||
+    slug !== project.slug ||
     prefix !== project.prefix ||
     (defaultColumnId || null) !== (project.default_column_id ?? null) ||
     (sprintColumnId || null) !== (project.sprint_column_id ?? null) ||
@@ -35,8 +61,14 @@ export function ProjectGeneralSettings() {
     completedColumnId !== currentDoneColumnId
 
   const handleSave = () => {
+    if (!name.trim() || !slug.trim()) {
+      toast.error('Name and slug are required')
+      return
+    }
+
     const newSprintColumnId = sprintColumnId || null
     const newAutoAssign = newSprintColumnId ? autoAssignSprint : false
+    const slugChanged = slug !== project.slug
 
     // Update completed column if changed
     if (completedColumnId !== currentDoneColumnId) {
@@ -60,6 +92,8 @@ export function ProjectGeneralSettings() {
       {
         projectId: project.id,
         input: {
+          name: name.trim(),
+          slug: slug.trim(),
           prefix,
           default_column_id: defaultColumnId || null,
           sprint_column_id: newSprintColumnId,
@@ -68,7 +102,12 @@ export function ProjectGeneralSettings() {
         },
       },
       {
-        onSuccess: () => toast.success('Project settings saved'),
+        onSuccess: () => {
+          toast.success('Project settings saved')
+          if (slugChanged) {
+            navigate({ to: '/p/$slug/settings', params: { slug: slug.trim() } })
+          }
+        },
         onError: (err) => toast.error(err.message),
       }
     )
@@ -79,6 +118,37 @@ export function ProjectGeneralSettings() {
       <h3 className="text-sm font-semibold text-foreground mb-3">General</h3>
 
       <div className="space-y-4">
+        {/* Project Name */}
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">
+            Project Name
+          </label>
+          <input
+            value={name}
+            onChange={(e) => handleNameChange(e.target.value)}
+            placeholder="My Project"
+            disabled={!isOwner}
+            className="w-full sm:w-64 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+        </div>
+
+        {/* Project Slug */}
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">
+            Project Slug
+          </label>
+          <input
+            value={slug}
+            onChange={(e) => handleSlugChange(e.target.value)}
+            placeholder="my-project"
+            disabled={!isOwner}
+            className="w-full sm:w-64 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            URL: /p/{slug || '…'}
+          </p>
+        </div>
+
         {/* Prefix */}
         <div>
           <label className="block text-xs text-muted-foreground mb-1">
