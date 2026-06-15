@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { toast } from "sonner";
-import { Calendar, Trash2, Archive, ArchiveRestore, CheckCircle, ChevronDown, ChevronRight } from "lucide-react";
+import { Calendar, Trash2, Archive, ArchiveRestore, CheckCircle, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { formatTaskRef } from "@/lib/utils";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -361,7 +361,17 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
         <div className="space-y-4">
           {/* Description */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</label>
+              {canEditTask && !isEditingDesc && (
+                <button
+                  onClick={startEditingDesc}
+                  className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             {isEditingDesc ? (
               <RichTextEditor
                 content={descRaw}
@@ -384,7 +394,6 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
             ) : (
               <div
                 key="desc-read"
-                onClick={() => canEditTask && startEditingDesc()}
                 onDragOver={canEditTask ? (e) => e.preventDefault() : undefined}
                 onDragEnter={
                   canEditTask
@@ -394,7 +403,7 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
                       }
                     : undefined
                 }
-                className={`mt-1 min-h-[120px] rounded-lg border border-transparent px-3 py-2 text-sm text-foreground whitespace-pre-wrap break-words ${canEditTask ? "hover:border-border transition-colors cursor-pointer" : ""}`}
+                className={`mt-1 min-h-[120px] rounded-lg border border-transparent px-3 py-2 text-sm text-foreground whitespace-pre-wrap break-words ${canEditTask ? "hover:border-border transition-colors" : ""}`}
               >
                 {descSegments ? (
                   descSegments.map((seg, i) =>
@@ -427,7 +436,7 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
                     ),
                   )
                 ) : (
-                  <span className="text-muted-foreground italic">{canEditTask ? "Click to add description..." : "No description"}</span>
+                  <span className="text-muted-foreground italic">{canEditTask ? "No description yet" : "No description"}</span>
                 )}
               </div>
             )}
