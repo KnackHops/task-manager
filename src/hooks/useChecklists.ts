@@ -26,7 +26,7 @@ export function useCreateChecklistItem(projectId: string) {
       await queryClient.cancelQueries({ queryKey: taskKeys.detail(taskId) })
       await queryClient.cancelQueries({ queryKey: taskKeys.all(projectId) })
 
-      const tempId = crypto.randomUUID()
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const optimistic: ChecklistItem = {
         id: tempId,
         task_id: taskId,
@@ -54,8 +54,8 @@ export function useCreateChecklistItem(projectId: string) {
       return { previousDetail, previousTasks, taskId }
     },
 
-    onError: (err, _vars, context) => {
-      toast.error(`Failed to add checklist item: ${err instanceof Error ? err.message : String(err)}`)
+    onError: (_err, _vars, context) => {
+      toast.error('Failed to add checklist item')
       if (context?.previousDetail) {
         queryClient.setQueryData(taskKeys.detail(context.taskId), context.previousDetail)
       }
