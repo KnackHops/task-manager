@@ -54,8 +54,8 @@ export function useCreateChecklistItem(projectId: string) {
       return { previousDetail, previousTasks, taskId }
     },
 
-    onError: (_err, _vars, context) => {
-      toast.error('Failed to add checklist item')
+    onError: (err, _vars, context) => {
+      toast.error(`Failed to add checklist item: ${err instanceof Error ? err.message : String(err)}`)
       if (context?.previousDetail) {
         queryClient.setQueryData(taskKeys.detail(context.taskId), context.previousDetail)
       }
