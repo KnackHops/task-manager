@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
+import { toast } from 'sonner'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -33,7 +34,10 @@ export function ChecklistSection({ taskId, projectId, items, canEdit }: Checklis
   const handleAdd = useCallback(() => {
     const title = newTitle.trim()
     if (!title) return
-    createItem.mutate({ taskId, title, position: items.length })
+    createItem.mutate(
+      { taskId, title, position: items.length },
+      { onError: () => toast.error('Failed to add checklist item') },
+    )
     setNewTitle('')
     inputRef.current?.focus()
   }, [newTitle, taskId, items.length, createItem])
@@ -118,7 +122,10 @@ export function ChecklistSection({ taskId, projectId, items, canEdit }: Checklis
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') handleAdd()
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                handleAdd()
+              }
             }}
             placeholder="Add item..."
             className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"

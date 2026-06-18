@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import {
   createChecklistItem,
   updateChecklistItem,
@@ -54,6 +55,7 @@ export function useCreateChecklistItem(projectId: string) {
     },
 
     onError: (_err, _vars, context) => {
+      toast.error('Failed to add checklist item')
       if (context?.previousDetail) {
         queryClient.setQueryData(taskKeys.detail(context.taskId), context.previousDetail)
       }
@@ -108,6 +110,7 @@ export function useUpdateChecklistItem(projectId: string) {
     },
 
     onError: (_err, _vars, context) => {
+      toast.error('Failed to update checklist item')
       if (context?.previousDetail) {
         queryClient.setQueryData(taskKeys.detail(context.taskId), context.previousDetail)
       }
@@ -154,6 +157,7 @@ export function useDeleteChecklistItem(projectId: string) {
     },
 
     onError: (_err, _vars, context) => {
+      toast.error('Failed to delete checklist item')
       if (context?.previousDetail) {
         queryClient.setQueryData(taskKeys.detail(context.taskId), context.previousDetail)
       }
@@ -214,6 +218,7 @@ export function useReorderChecklistItems(projectId: string) {
     },
 
     onError: (_err, _vars, context) => {
+      toast.error('Failed to reorder checklist items')
       if (context?.previousDetail) {
         queryClient.setQueryData(taskKeys.detail(context.taskId), context.previousDetail)
       }
