@@ -237,6 +237,8 @@ export function CommentItem({
                 return tempId
               }}
               stagedFiles={stagedFiles}
+              attachments={allAttachments}
+              onEscape={handleCancelEdit}
               onStagedFileDrop={(file) => {
                 if (file.size > FILE_SIZE_LIMIT) {
                   toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${file.name}`)
@@ -244,6 +246,7 @@ export function CommentItem({
                 }
                 const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
                 inlineImagesRef.current.set(tempId, file)
+                setStagedFiles((prev) => prev.filter((f) => f !== file))
                 return tempId
               }}
               minHeight="2.5rem"

@@ -135,6 +135,7 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
               }
               const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
               inlineImagesRef.current.set(tempId, file)
+              setStagedFiles((prev) => prev.filter((f) => f !== file))
               return tempId
             }}
             minHeight="4.75rem"

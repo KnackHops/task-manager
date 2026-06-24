@@ -388,6 +388,11 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
                   inlineImagesRef.current.set(tempId, file);
                   return tempId;
                 }}
+                attachments={taskAttachments}
+                onEscape={() => {
+                  inlineImagesRef.current.clear();
+                  setIsEditingDesc(false);
+                }}
                 minHeight="200px"
                 className="mt-1"
               />

@@ -16,7 +16,10 @@ export function Dialog({ open, onClose, children, className }: DialogProps) {
   useEffect(() => {
     if (!open) return
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      const target = e.target as HTMLElement | null
+      if (target?.closest?.('[contenteditable="true"]')) return
+      onClose()
     }
     document.addEventListener('keydown', handleEsc)
     document.body.style.overflow = 'hidden'

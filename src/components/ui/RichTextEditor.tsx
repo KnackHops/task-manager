@@ -20,6 +20,7 @@ import {
   Code,
   Link as LinkIcon,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { toTiptapDoc, fromTiptapDoc } from '@/lib/tiptap-serializer'
 import { createMentionSuggestion } from '@/components/ui/MentionSuggestion'
@@ -140,6 +141,10 @@ export interface RichTextEditorProps {
   editorRef?: React.MutableRefObject<ReturnType<typeof useEditor> | null>
   /** Ctrl+Enter handler */
   onSubmit?: () => void
+  /** Existing attachments for resolving inline image URLs in edit mode */
+  attachments?: { id: string; storage_path: string; file_type: string }[]
+  /** Called when Escape pressed inside editor (cancel edit) */
+  onEscape?: () => void
 }
 
 // ─── Component ─────────────────────────────────────────────────────
@@ -159,12 +164,16 @@ export function RichTextEditor({
   minHeight = '5rem',
   editorRef,
   onSubmit,
+  attachments,
+  onEscape,
 }: RichTextEditorProps) {
   const isInitialMount = useRef(true)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const onSubmitRef = useRef(onSubmit)
   onSubmitRef.current = onSubmit
+  const onEscapeRef = useRef(onEscape)
+  onEscapeRef.current = onEscape
 
   const mentionSuggestion = useMemo(
     () => createMentionSuggestion(members),
@@ -226,6 +235,11 @@ export function RichTextEditor({
         if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
           event.preventDefault()
           onSubmitRef.current?.()
+          return true
+        }
+        if (event.key === 'Escape' && onEscapeRef.current) {
+          event.preventDefault()
+          onEscapeRef.current()
           return true
         }
         return false
@@ -338,6 +352,50 @@ export function RichTextEditor({
   useEffect(() => {
     editor?.setEditable(editable)
   }, [editor, editable])
+
+  // Resolve inline image URLs from attachments (for edit mode)
+  useEffect(() => {
+    if (!editor || !attachments?.length) return
+    const { doc } = editor.state
+    const updates: { pos: number; id: string }[] = []
+    doc.descendants((node, pos) => {
+      if (node.type.name === 'image' && !node.attrs.src && node.attrs['data-inline-id']) {
+        updates.push({ pos, id: node.attrs['data-inline-id'] })
+      }
+    })
+    if (updates.length === 0) return
+
+    let cancelled = false
+    Promise.all(
+      updates.map(async ({ pos, id }) => {
+        const att = attachments.find((a) => a.id === id)
+        if (!att) return null
+        const { data } = await supabase.storage
+          .from('attachments')
+          .createSignedUrl(att.storage_path, 3600)
+        return data?.signedUrl ? { pos, url: data.signedUrl, id } : null
+      })
+    ).then((results) => {
+      if (cancelled || !editor) return
+      const valid = results.filter(Boolean) as { pos: number; url: string; id: string }[]
+      if (valid.length === 0) return
+      // Re-scan positions since doc may have changed
+      const { tr } = editor.state
+      let modified = false
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === 'image' && !node.attrs.src && node.attrs['data-inline-id']) {
+          const match = valid.find((v) => v.id === node.attrs['data-inline-id'])
+          if (match) {
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, src: match.url })
+            modified = true
+          }
+        }
+      })
+      if (modified) editor.view.dispatch(tr)
+    })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, attachments])
 
   // Update content when prop changes (not on initial mount)
   useEffect(() => {
