@@ -23,7 +23,7 @@ import { AttachmentList } from "@/components/attachment/AttachmentList";
 import { ChecklistSection } from "@/components/task/ChecklistSection";
 import { useUploadAttachment, useTaskAttachments } from "@/hooks/useAttachments";
 import { useAuth } from "@/contexts/AuthContext";
-import { parseBody, getFirstName } from "@/lib/mentions";
+import { parseBody, getFirstName, type BodySegment } from "@/lib/mentions";
 import { FILE_SIZE_LIMIT, formatFileSize } from "@/lib/file-utils";
 import { replaceInlineTempId, removeInlineTempId } from "@/lib/rich-editor";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
@@ -112,6 +112,41 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
     }
     return map;
   }, [members]);
+
+  const renderDescSeg = useCallback((seg: BodySegment, i: number): React.ReactNode => {
+    switch (seg.type) {
+      case 'mention':
+        return (
+          <MentionPopover key={i} name={memberMap.get(seg.userId)?.fullName ?? seg.name} email={memberMap.get(seg.userId)?.email ?? null}>
+            <span className="rounded bg-primary/20 px-1 text-primary font-medium cursor-default">@{getFirstName(seg.name)}</span>
+          </MentionPopover>
+        );
+      case 'image':
+        return <InlineCommentImage key={i} attachmentId={seg.attachmentId} attachments={taskAttachments ?? []} />;
+      case 'file_link':
+        return <InlineFileLink key={i} attachmentId={seg.attachmentId} fileName={seg.fileName} attachments={taskAttachments ?? []} />;
+      case 'bold':
+        return <strong key={i} className="font-semibold">{seg.value}</strong>;
+      case 'italic':
+        return <em key={i}>{seg.value}</em>;
+      case 'strike':
+        return <s key={i} className="text-muted-foreground">{seg.value}</s>;
+      case 'code':
+        return <code key={i} className="rounded bg-muted px-1 py-0.5 text-xs font-mono">{seg.value}</code>;
+      case 'link':
+        return <a key={i} href={seg.href} target="_blank" rel="noopener noreferrer" className="text-primary underline">{seg.text}</a>;
+      case 'list': {
+        const Tag = seg.ordered ? 'ol' : 'ul';
+        return (
+          <Tag key={i} className={`${seg.ordered ? 'list-decimal' : 'list-disc'} pl-5 my-1`}>
+            {seg.items.map((itemSegs, j) => <li key={j}>{itemSegs.map((s, k) => renderDescSeg(s, k))}</li>)}
+          </Tag>
+        );
+      }
+      default:
+        return <span key={i}>{'value' in seg ? seg.value : ''}</span>;
+    }
+  }, [memberMap, taskAttachments]);
 
   useEffect(() => {
     if (task) {
@@ -411,35 +446,7 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
                 className={`mt-1 min-h-[120px] rounded-lg border border-transparent px-3 py-2 text-sm text-foreground whitespace-pre-wrap break-words ${canEditTask ? "hover:border-border transition-colors" : ""}`}
               >
                 {descSegments ? (
-                  descSegments.map((seg, i) =>
-                    seg.type === "mention" ? (
-                      <MentionPopover key={i} name={memberMap.get(seg.userId)?.fullName ?? seg.name} email={memberMap.get(seg.userId)?.email ?? null}>
-                        <span className="rounded bg-primary/20 px-1 text-primary font-medium cursor-default">@{getFirstName(seg.name)}</span>
-                      </MentionPopover>
-                    ) : seg.type === "image" ? (
-                      <InlineCommentImage key={i} attachmentId={seg.attachmentId} attachments={taskAttachments ?? []} />
-                    ) : seg.type === "file_link" ? (
-                      <InlineFileLink key={i} attachmentId={seg.attachmentId} fileName={seg.fileName} attachments={taskAttachments ?? []} />
-                    ) : seg.type === "bold" ? (
-                      <strong key={i} className="font-semibold">{seg.value}</strong>
-                    ) : seg.type === "italic" ? (
-                      <em key={i}>{seg.value}</em>
-                    ) : seg.type === "strike" ? (
-                      <s key={i} className="text-muted-foreground">{seg.value}</s>
-                    ) : seg.type === "code" ? (
-                      <code key={i} className="rounded bg-muted px-1 py-0.5 text-xs font-mono">{seg.value}</code>
-                    ) : seg.type === "link" ? (
-                      <a key={i} href={seg.href} target="_blank" rel="noopener noreferrer" className="text-primary underline">{seg.text}</a>
-                    ) : seg.type === "list" ? (
-                      seg.ordered ? (
-                        <ol key={i} className="list-decimal pl-5 my-1">{seg.items.map((item, j) => <li key={j}>{item}</li>)}</ol>
-                      ) : (
-                        <ul key={i} className="list-disc pl-5 my-1">{seg.items.map((item, j) => <li key={j}>{item}</li>)}</ul>
-                      )
-                    ) : (
-                      <span key={i}>{'value' in seg ? seg.value : ''}</span>
-                    ),
-                  )
+                  descSegments.map((seg, i) => renderDescSeg(seg, i))
                 ) : (
                   <span className="text-muted-foreground italic">{canEditTask ? "No description yet" : "No description"}</span>
                 )}

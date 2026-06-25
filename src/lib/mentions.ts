@@ -28,7 +28,7 @@ export type BodySegment =
   | { type: 'strike'; value: string }
   | { type: 'code'; value: string }
   | { type: 'link'; text: string; href: string }
-  | { type: 'list'; ordered: boolean; items: string[] }
+  | { type: 'list'; ordered: boolean; items: BodySegment[][] }
 
 // Inline formatting regexes (non-global, used for first-match scanning)
 const BOLD_RE = /\*\*(.+?)\*\*/
@@ -96,6 +96,54 @@ function parseInlineFormatting(text: string): BodySegment[] {
   return segments
 }
 
+/** Parse a text string for mentions, images, file_links, and inline formatting. */
+function parseInlineText(text: string): BodySegment[] {
+  type MatchInfo =
+    | { type: 'mention'; index: number; length: number; name: string; userId: string }
+    | { type: 'image'; index: number; length: number; attachmentId: string }
+    | { type: 'file_link'; index: number; length: number; fileName: string; attachmentId: string }
+
+  const matches: MatchInfo[] = []
+  const mentionRe = new RegExp(MENTION_REGEX.source, 'g')
+  const imageRe = new RegExp(IMAGE_REGEX.source, 'g')
+  const fileLinkRe = new RegExp(FILE_LINK_REGEX.source, 'g')
+  let m: RegExpExecArray | null
+
+  while ((m = mentionRe.exec(text)) !== null) {
+    matches.push({ type: 'mention', index: m.index, length: m[0].length, name: m[1]!, userId: m[2]! })
+  }
+  while ((m = imageRe.exec(text)) !== null) {
+    matches.push({ type: 'image', index: m.index, length: m[0].length, attachmentId: m[1]! })
+  }
+  while ((m = fileLinkRe.exec(text)) !== null) {
+    matches.push({ type: 'file_link', index: m.index, length: m[0].length, fileName: m[1]!, attachmentId: m[2]! })
+  }
+
+  matches.sort((a, b) => a.index - b.index)
+
+  const segments: BodySegment[] = []
+  let lastIndex = 0
+  for (const match of matches) {
+    if (match.index > lastIndex) {
+      segments.push(...parseInlineFormatting(text.slice(lastIndex, match.index)))
+    }
+    if (match.type === 'mention') {
+      segments.push({ type: 'mention', name: match.name, userId: match.userId })
+    } else if (match.type === 'image') {
+      segments.push({ type: 'image', attachmentId: match.attachmentId })
+    } else {
+      segments.push({ type: 'file_link', fileName: match.fileName, attachmentId: match.attachmentId })
+    }
+    lastIndex = match.index + match.length
+  }
+
+  if (lastIndex < text.length) {
+    segments.push(...parseInlineFormatting(text.slice(lastIndex)))
+  }
+
+  return segments
+}
+
 export function parseBody(body: string): BodySegment[] {
   // First pass: extract list blocks
   const lines = body.split('\n')
@@ -142,56 +190,15 @@ export function parseBody(body: string): BodySegment[] {
 
   for (const block of blocks) {
     if (block.type === 'list') {
-      segments.push({ type: 'list', ordered: block.ordered, items: block.items })
+      segments.push({
+        type: 'list',
+        ordered: block.ordered,
+        items: block.items.map((item) => parseInlineText(item)),
+      })
       continue
     }
 
-    // Parse text block for mentions, images, file_links, then inline formatting
-    const text = block.value
-
-    // Collect special token matches
-    type MatchInfo =
-      | { type: 'mention'; index: number; length: number; name: string; userId: string }
-      | { type: 'image'; index: number; length: number; attachmentId: string }
-      | { type: 'file_link'; index: number; length: number; fileName: string; attachmentId: string }
-
-    const matches: MatchInfo[] = []
-    const mentionRe = new RegExp(MENTION_REGEX.source, 'g')
-    const imageRe = new RegExp(IMAGE_REGEX.source, 'g')
-    const fileLinkRe = new RegExp(FILE_LINK_REGEX.source, 'g')
-    let m: RegExpExecArray | null
-
-    while ((m = mentionRe.exec(text)) !== null) {
-      matches.push({ type: 'mention', index: m.index, length: m[0].length, name: m[1]!, userId: m[2]! })
-    }
-    while ((m = imageRe.exec(text)) !== null) {
-      matches.push({ type: 'image', index: m.index, length: m[0].length, attachmentId: m[1]! })
-    }
-    while ((m = fileLinkRe.exec(text)) !== null) {
-      matches.push({ type: 'file_link', index: m.index, length: m[0].length, fileName: m[1]!, attachmentId: m[2]! })
-    }
-
-    matches.sort((a, b) => a.index - b.index)
-
-    let lastIndex = 0
-    for (const match of matches) {
-      if (match.index > lastIndex) {
-        // Parse inline formatting in the gap
-        segments.push(...parseInlineFormatting(text.slice(lastIndex, match.index)))
-      }
-      if (match.type === 'mention') {
-        segments.push({ type: 'mention', name: match.name, userId: match.userId })
-      } else if (match.type === 'image') {
-        segments.push({ type: 'image', attachmentId: match.attachmentId })
-      } else {
-        segments.push({ type: 'file_link', fileName: match.fileName, attachmentId: match.attachmentId })
-      }
-      lastIndex = match.index + match.length
-    }
-
-    if (lastIndex < text.length) {
-      segments.push(...parseInlineFormatting(text.slice(lastIndex)))
-    }
+    segments.push(...parseInlineText(block.value))
   }
 
   return segments
