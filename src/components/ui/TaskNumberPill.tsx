@@ -13,12 +13,27 @@ export function TaskNumberPill({
   taskId: string
   className?: string
 }) {
-  const copy = (e: React.MouseEvent) => {
+  const copy = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    navigator.clipboard
-      .writeText(taskId)
-      .then(() => toast.success(`Copied ${taskId}`))
-      .catch(() => toast.error('Copy failed'))
+    try {
+      // navigator.clipboard is undefined outside secure contexts (HTTP/LAN IP),
+      // so fall back to execCommand there.
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(taskId)
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = taskId
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      toast.success(`Copied ${taskId}`)
+    } catch {
+      toast.error('Copy failed')
+    }
   }
 
   return (

@@ -5,6 +5,7 @@ import {
   createComment,
   updateComment,
   deleteComment,
+  toggleReaction,
 } from '@/services/comments'
 import { supabase } from '@/lib/supabase'
 
@@ -29,6 +30,16 @@ export function useComments(taskId: string | undefined) {
           table: 'comments',
           filter: `task_id=eq.${taskId}`,
         },
+        () => {
+          queryClient.invalidateQueries({ queryKey: commentKeys.all(taskId) })
+        }
+      )
+      // Reactions have no task_id to filter on, so we listen to all and refetch
+      // this task's comments. ponytail: unfiltered — a reaction on another task
+      // triggers one extra refetch here; fine at current scale.
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'comment_reactions' },
         () => {
           queryClient.invalidateQueries({ queryKey: commentKeys.all(taskId) })
         }
@@ -79,6 +90,24 @@ export function useDeleteComment(taskId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (commentId: string) => deleteComment(commentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commentKeys.all(taskId) })
+    },
+  })
+}
+
+export function useToggleReaction(taskId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      commentId,
+      userId,
+      emoji,
+    }: {
+      commentId: string
+      userId: string
+      emoji: string
+    }) => toggleReaction(commentId, userId, emoji),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: commentKeys.all(taskId) })
     },
