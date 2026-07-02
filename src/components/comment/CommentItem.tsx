@@ -5,6 +5,8 @@ import { Avatar } from '@/components/ui/Avatar'
 import { AttachmentItem } from '@/components/attachment/AttachmentItem'
 import { parseBody, getFirstName, type BodySegment } from '@/lib/mentions'
 import { MentionPopover } from './MentionPopover'
+import { ReactionBar } from './ReactionBar'
+import { useToggleReaction } from '@/hooks/useComments'
 import { InlineCommentImage } from './InlineCommentImage'
 import { InlineFileLink } from './InlineFileLink'
 import { RichTextEditor } from '@/components/ui/RichTextEditor'
@@ -54,6 +56,7 @@ export function CommentItem({
   const deleteAttach = useDeleteAttachment(undefined, comment.id)
   const uploadAttach = useUploadAttachment()
   const reorderAttach = useReorderAttachments(undefined, comment.id)
+  const toggleReaction = useToggleReaction(comment.task_id)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inlineImagesRef = useRef<Map<string, File>>(new Map())
 
@@ -415,6 +418,22 @@ export function CommentItem({
             </div>
           )
         })()}
+
+        {!editing && (
+          <ReactionBar
+            reactions={comment.reactions ?? []}
+            currentUserId={user?.id}
+            memberMap={memberMap}
+            onToggle={(emoji) => {
+              if (!user) return
+              toggleReaction.mutate({
+                commentId: comment.id,
+                userId: user.id,
+                emoji,
+              })
+            }}
+          />
+        )}
       </div>
 
       <ConfirmDialog

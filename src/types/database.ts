@@ -159,8 +159,14 @@ export interface Comment {
   updated_at: string
 }
 
+export interface CommentReaction {
+  emoji: string
+  user_id: string
+}
+
 export interface CommentWithAuthor extends Comment {
   author: Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url'> | null
+  reactions: CommentReaction[]
 }
 
 export interface Notification {

@@ -3,7 +3,8 @@ import type { CommentWithAuthor } from '@/types/database'
 
 const COMMENT_SELECT = `
   *,
-  author:profiles!author_id(id, full_name, email, avatar_url)
+  author:profiles!author_id(id, full_name, email, avatar_url),
+  reactions:comment_reactions(emoji, user_id)
 `
 
 const COMMENT_PAGE_SIZE = 30
@@ -83,4 +84,34 @@ export async function deleteComment(commentId: string): Promise<void> {
     .eq('id', commentId)
 
   if (error) throw error
+}
+
+/** Toggle a user's emoji reaction on a comment (add if absent, remove if present). */
+export async function toggleReaction(
+  commentId: string,
+  userId: string,
+  emoji: string
+): Promise<void> {
+  const { data: existing, error: selErr } = await supabase
+    .from('comment_reactions')
+    .select('id')
+    .eq('comment_id', commentId)
+    .eq('user_id', userId)
+    .eq('emoji', emoji)
+    .maybeSingle()
+
+  if (selErr) throw selErr
+
+  if (existing) {
+    const { error } = await supabase
+      .from('comment_reactions')
+      .delete()
+      .eq('id', existing.id)
+    if (error) throw error
+  } else {
+    const { error } = await supabase
+      .from('comment_reactions')
+      .insert({ comment_id: commentId, user_id: userId, emoji })
+    if (error) throw error
+  }
 }
