@@ -11,10 +11,11 @@ import { CommentForm } from './CommentForm'
 interface CommentListProps {
   taskId: string
   projectId: string
+  readOnly?: boolean
 }
 
 export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
-  function CommentList({ taskId, projectId }, ref) {
+  function CommentList({ taskId, projectId, readOnly = false }, ref) {
     const { user } = useAuth()
     const {
       data,
@@ -111,6 +112,7 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
                 taskAttachments={taskAttachments ?? []}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                readOnly={readOnly}
               />
             ))
           ) : (
@@ -119,9 +121,11 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
             </p>
           )}
         </div>
-        <div ref={ref}>
-          <CommentForm taskId={taskId} projectId={projectId} />
-        </div>
+        {!readOnly && (
+          <div ref={ref}>
+            <CommentForm taskId={taskId} projectId={projectId} />
+          </div>
+        )}
       </div>
     )
   }

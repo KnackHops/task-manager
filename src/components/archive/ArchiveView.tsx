@@ -8,6 +8,7 @@ import { useSprints } from "@/hooks/useSprints";
 import { useProjectContext } from "@/contexts/ProjectContext";
 import { PriorityBadge, TagBadge, TAG_COLOR_MAP } from "@/components/ui/Badge";
 import { Avatar } from "@/components/ui/Avatar";
+import { TaskDetailPanel } from "@/components/task/TaskDetailPanel";
 import { formatDistanceToNow } from "date-fns";
 
 interface ArchiveViewProps {
@@ -50,6 +51,7 @@ export function ArchiveView({ projectId }: ArchiveViewProps) {
 
   const [restoreColumnId, setRestoreColumnId] = useState<Record<string, string>>({});
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const toggleTag = (tagId: string) => {
     setSelectedTagIds((prev) =>
@@ -219,12 +221,23 @@ export function ArchiveView({ projectId }: ArchiveViewProps) {
         <div className="space-y-2">
           {filteredTasks.map((task) => (
             <div key={task.id} className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-4 py-3">
-              <div className="flex-1 min-w-0">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedTaskId(task.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedTaskId(task.id);
+                  }
+                }}
+                className="flex-1 min-w-0 cursor-pointer"
+              >
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-medium text-muted-foreground font-mono shrink-0">
                     {formatTaskRef(project.prefix, task.task_number)}
                   </span>
-                  <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
+                  <p className="text-sm font-medium text-foreground truncate hover:text-primary transition-colors">{task.title}</p>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <PriorityBadge priority={task.priority} />
@@ -311,6 +324,14 @@ export function ArchiveView({ projectId }: ArchiveViewProps) {
             </div>
           )}
         </div>
+      )}
+
+      {selectedTaskId && (
+        <TaskDetailPanel
+          taskId={selectedTaskId}
+          projectId={projectId}
+          onClose={() => setSelectedTaskId(null)}
+        />
       )}
     </div>
   );

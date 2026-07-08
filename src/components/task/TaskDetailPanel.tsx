@@ -194,6 +194,10 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
     );
   }
 
+  // Archived tasks are frozen: view everything, but only restore/delete.
+  const readOnly = task.archived;
+  const canEdit = canEditTask && !readOnly;
+
   const handleFieldUpdate = (field: string, value: string | number | null) => {
     updateTask.mutate({ taskId, input: { [field]: value } as Record<string, unknown> }, { onError: (err) => toast.error(err.message) });
   };
@@ -325,7 +329,7 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
               <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={handleTitleBlur} onKeyDown={(e) => e.key === "Enter" && handleTitleBlur()} autoFocus className="flex-1 bg-transparent text-lg font-semibold text-foreground outline-none border-b border-primary" />
             ) : (
               <DialogTitle>
-                <span onClick={() => canEditTask && setIsEditingTitle(true)} className={`block truncate ${canEditTask ? "hover:text-primary transition-colors cursor-pointer" : ""}`}>
+                <span onClick={() => canEdit && setIsEditingTitle(true)} className={`block truncate ${canEdit ? "hover:text-primary transition-colors cursor-pointer" : ""}`}>
                   {task.title}
                 </span>
               </DialogTitle>
@@ -334,13 +338,13 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
 
           {/* Action buttons — inline with the title */}
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-            <TaskTimerButton taskId={taskId} variant="labeled" />
+            {!readOnly && <TaskTimerButton taskId={taskId} variant="labeled" />}
             {(taskTotalSeconds ?? 0) > 0 && (
               <span className="text-xs tabular-nums text-muted-foreground" title="Your time on this task">
                 {formatDuration(taskTotalSeconds ?? 0)}
               </span>
             )}
-            {canEditTask && (
+            {canEdit && (
               <button
                 onClick={() => {
                   if (!task.is_done && unfinishedDeps.length > 0) {
@@ -398,7 +402,7 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
           <div>
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</label>
-              {canEditTask && !isEditingDesc && (
+              {canEdit && !isEditingDesc && (
                 <button
                   onClick={startEditingDesc}
                   className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -434,21 +438,21 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
             ) : (
               <div
                 key="desc-read"
-                onDragOver={canEditTask ? (e) => e.preventDefault() : undefined}
+                onDragOver={canEdit ? (e) => e.preventDefault() : undefined}
                 onDragEnter={
-                  canEditTask
+                  canEdit
                     ? (e) => {
                         e.preventDefault();
                         startEditingDesc();
                       }
                     : undefined
                 }
-                className={`mt-1 min-h-[120px] rounded-lg border border-transparent px-3 py-2 text-sm text-foreground whitespace-pre-wrap break-words ${canEditTask ? "hover:border-border transition-colors" : ""}`}
+                className={`mt-1 min-h-[120px] rounded-lg border border-transparent px-3 py-2 text-sm text-foreground whitespace-pre-wrap break-words ${canEdit ? "hover:border-border transition-colors" : ""}`}
               >
                 {descSegments ? (
                   descSegments.map((seg, i) => renderDescSeg(seg, i))
                 ) : (
-                  <span className="text-muted-foreground italic">{canEditTask ? "No description yet" : "No description"}</span>
+                  <span className="text-muted-foreground italic">{canEdit ? "No description yet" : "No description"}</span>
                 )}
               </div>
             )}
@@ -459,7 +463,7 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
             taskId={taskId}
             projectId={project.id}
             items={task.checklist_items ?? []}
-            canEdit={canEditTask}
+            canEdit={canEdit}
           />
 
           {/* Attachments */}
@@ -504,35 +508,37 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
             </button>
             {detailsOpen && (
               <div className="mt-3 space-y-4">
-                <TagSelect tags={projectTags} selectedIds={currentTagIds} onChange={handleTagsChange} label="Tags" />
+                <TagSelect tags={projectTags} selectedIds={currentTagIds} onChange={handleTagsChange} label="Tags" disabled={readOnly} />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Select
-                    id="detail-column"
-                    label="Column"
-                    options={columnOptions}
-                    value={task.column_id}
-                    onChange={(e) => {
-                      const newColId = e.target.value;
-                      const movingIntoDone = doneColumnIds.includes(newColId) && !doneColumnIds.includes(task.column_id);
-                      const movingOutOfDone = doneColumnIds.includes(task.column_id) && !doneColumnIds.includes(newColId);
-                      if (movingIntoDone && unfinishedDeps.length === 0) {
-                        updateTask.mutate({ taskId, input: { column_id: newColId, is_done: true, done_at: new Date().toISOString() } }, { onError: (err) => toast.error(err.message) });
-                      } else if (movingOutOfDone && task.is_done) {
-                        updateTask.mutate({ taskId, input: { column_id: newColId, is_done: false, done_at: null } }, { onError: (err) => toast.error(err.message) });
-                      } else {
-                        handleFieldUpdate("column_id", newColId);
-                      }
-                    }}
-                  />
+                  {!readOnly && (
+                    <Select
+                      id="detail-column"
+                      label="Column"
+                      options={columnOptions}
+                      value={task.column_id}
+                      onChange={(e) => {
+                        const newColId = e.target.value;
+                        const movingIntoDone = doneColumnIds.includes(newColId) && !doneColumnIds.includes(task.column_id);
+                        const movingOutOfDone = doneColumnIds.includes(task.column_id) && !doneColumnIds.includes(newColId);
+                        if (movingIntoDone && unfinishedDeps.length === 0) {
+                          updateTask.mutate({ taskId, input: { column_id: newColId, is_done: true, done_at: new Date().toISOString() } }, { onError: (err) => toast.error(err.message) });
+                        } else if (movingOutOfDone && task.is_done) {
+                          updateTask.mutate({ taskId, input: { column_id: newColId, is_done: false, done_at: null } }, { onError: (err) => toast.error(err.message) });
+                        } else {
+                          handleFieldUpdate("column_id", newColId);
+                        }
+                      }}
+                    />
+                  )}
 
-                  <Select id="detail-priority" label="Priority" options={PRIORITY_OPTIONS} value={task.priority} onChange={(e) => handleFieldUpdate("priority", e.target.value)} />
+                  <Select id="detail-priority" label="Priority" options={PRIORITY_OPTIONS} value={task.priority} onChange={(e) => handleFieldUpdate("priority", e.target.value)} disabled={readOnly} />
 
                   <div className="space-y-2">
                     <label htmlFor="detail-sprint" className="text-sm font-medium text-foreground">
                       Sprint
                     </label>
-                    <select id="detail-sprint" value={task.sprint_id ?? ""} onChange={(e) => handleFieldUpdate("sprint_id", e.target.value || null)} className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset appearance-none">
+                    <select id="detail-sprint" disabled={readOnly} value={task.sprint_id ?? ""} onChange={(e) => handleFieldUpdate("sprint_id", e.target.value || null)} className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset appearance-none disabled:opacity-50 disabled:cursor-default">
                       <option value="">No Sprint</option>
                       {sprints
                         ?.filter((s) => s.status !== "completed")
@@ -554,13 +560,14 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
                       type="number"
                       min="0"
                       max="100"
+                      disabled={readOnly}
                       value={task.story_points ?? ""}
                       onChange={(e) => {
                         const val = e.target.value;
                         handleFieldUpdate("story_points", val ? Number(val) : null);
                       }}
                       placeholder="—"
-                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset"
+                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset disabled:opacity-50 disabled:cursor-default"
                     />
                   </div>
 
@@ -569,7 +576,7 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
                       Start Date
                     </label>
                     <div className="relative flex items-center">
-                      <input id="detail-start-date" type="date" disabled={!canEditTask} value={task.start_date ?? ""} max={task.due_date ?? undefined} onChange={(e) => handleFieldUpdate("start_date", e.target.value || null)} className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset disabled:opacity-50 disabled:cursor-default [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer" />
+                      <input id="detail-start-date" type="date" disabled={!canEdit} value={task.start_date ?? ""} max={task.due_date ?? undefined} onChange={(e) => handleFieldUpdate("start_date", e.target.value || null)} className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset disabled:opacity-50 disabled:cursor-default [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer" />
                       <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
@@ -579,17 +586,17 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
                       Due Date
                     </label>
                     <div className="relative flex items-center">
-                      <input id="detail-due-date" type="date" disabled={!canEditTask} value={task.due_date ?? ""} min={task.start_date ?? undefined} onChange={(e) => handleFieldUpdate("due_date", e.target.value || null)} className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset disabled:opacity-50 disabled:cursor-default [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer" />
+                      <input id="detail-due-date" type="date" disabled={!canEdit} value={task.due_date ?? ""} min={task.start_date ?? undefined} onChange={(e) => handleFieldUpdate("due_date", e.target.value || null)} className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 pr-8 text-sm text-foreground ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset disabled:opacity-50 disabled:cursor-default [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer" />
                       <Calendar className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
 
                   <div className="sm:col-span-2">
-                    <AssigneeSelect members={members ?? []} selectedIds={currentAssigneeIds} onChange={handleAssigneesChange} label="Assignees" />
+                    <AssigneeSelect members={members ?? []} selectedIds={currentAssigneeIds} onChange={handleAssigneesChange} label="Assignees" disabled={readOnly} />
                   </div>
 
                   <div className="sm:col-span-2">
-                    <DependencySelect tasks={allProjectTasks ?? []} currentTaskId={taskId} selectedIds={currentDependencyIds} onChange={handleDependenciesChange} label="Dependencies" prefix={project.prefix} />
+                    <DependencySelect tasks={allProjectTasks ?? []} currentTaskId={taskId} selectedIds={currentDependencyIds} onChange={handleDependenciesChange} label="Dependencies" prefix={project.prefix} disabled={readOnly} />
                   </div>
                 </div>
               </div>
@@ -601,20 +608,22 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
         <div className="mt-6 border-t border-border pt-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Comments</h3>
-            <button
-              type="button"
-              onClick={() => {
-                commentFormNodeRef.current?.scrollIntoView({ behavior: "smooth" });
-                setTimeout(() => {
-                  commentFormNodeRef.current?.querySelector<HTMLDivElement>("[contenteditable]")?.focus();
-                }, 300);
-              }}
-              className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
-            >
-              Reply
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => {
+                  commentFormNodeRef.current?.scrollIntoView({ behavior: "smooth" });
+                  setTimeout(() => {
+                    commentFormNodeRef.current?.querySelector<HTMLDivElement>("[contenteditable]")?.focus();
+                  }, 300);
+                }}
+                className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                Reply
+              </button>
+            )}
           </div>
-          <CommentList ref={commentFormRef} taskId={taskId} projectId={projectId} />
+          <CommentList ref={commentFormRef} taskId={taskId} projectId={projectId} readOnly={readOnly} />
         </div>
       </div>
 

@@ -36,6 +36,7 @@ interface CommentItemProps {
   taskAttachments?: AttachmentWithUploader[]
   onEdit: (commentId: string, body: string) => Promise<void> | void
   onDelete: (commentId: string) => void
+  readOnly?: boolean
 }
 
 export function CommentItem({
@@ -45,6 +46,7 @@ export function CommentItem({
   taskAttachments = [],
   onEdit,
   onDelete,
+  readOnly = false,
 }: CommentItemProps) {
   const { user } = useAuth()
   const [editing, setEditing] = useState(false)
@@ -240,7 +242,7 @@ export function CommentItem({
               (edited)
             </span>
           )}
-          {isOwn && !editing && (
+          {isOwn && !editing && !readOnly && (
             <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={startEditing}
@@ -424,6 +426,7 @@ export function CommentItem({
             reactions={comment.reactions ?? []}
             currentUserId={user?.id}
             memberMap={memberMap}
+            disabled={readOnly}
             onToggle={(emoji) => {
               if (!user) return
               toggleReaction.mutate({
