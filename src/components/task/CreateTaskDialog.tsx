@@ -27,6 +27,7 @@ import {
   formatFileSize,
 } from '@/lib/file-utils'
 import { replaceInlineTempId, removeInlineTempId } from '@/lib/rich-editor'
+import { StagedFileTile } from '@/components/attachment/StagedFileTile'
 import type { TaskPriority } from '@/types/database'
 
 interface CreateTaskDialogProps {
@@ -84,14 +85,31 @@ export function CreateTaskDialog({
   const [dependencyIds, setDependencyIds] = useState<string[]>([])
   const [descRaw, setDescRaw] = useState('')
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
-  const [checklistItems, setChecklistItems] = useState<string[]>([])
+  const [checklistItems, setChecklistItems] = useState<{ title: string; files: File[] }[]>([])
   const [newChecklistTitle, setNewChecklistTitle] = useState('')
   const [editingChecklistIndex, setEditingChecklistIndex] = useState<number | null>(null)
   const [editingChecklistDraft, setEditingChecklistDraft] = useState('')
+  const [pendingChecklistIndex, setPendingChecklistIndex] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const checklistFileInputRef = useRef<HTMLInputElement>(null)
   const inlineImagesRef = useRef<Map<string, File>>(new Map())
+
+  const handleAttachToChecklist = (files: FileList) => {
+    if (pendingChecklistIndex === null) return
+    const idx = pendingChecklistIndex
+    const arr = Array.from(files)
+    const oversized = arr.filter((f) => f.size > FILE_SIZE_LIMIT)
+    if (oversized.length > 0) {
+      toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${oversized.map((f) => f.name).join(', ')}`)
+    }
+    const valid = arr.filter((f) => f.size <= FILE_SIZE_LIMIT)
+    if (valid.length > 0) {
+      setChecklistItems((prev) => prev.map((it, i) => i === idx ? { ...it, files: [...it.files, ...valid] } : it))
+    }
+    setPendingChecklistIndex(null)
+  }
 
   const handleChecklistDragEnd = (result: DropResult) => {
     if (!result.destination) return
@@ -180,15 +198,28 @@ export function CreateTaskDialog({
         }
       }
 
-      // Create checklist items after task creation
+      // Create checklist items after task creation, then upload their staged files
       if (checklistItems.length > 0) {
         for (let i = 0; i < checklistItems.length; i++) {
+          const item = checklistItems[i]!
           try {
-            await createChecklistItem(task.id, checklistItems[i]!, i)
+            const created = await createChecklistItem(task.id, item.title, i)
+            for (const file of item.files) {
+              try {
+                await uploadAttachment.mutateAsync({
+                  file,
+                  uploadedBy: user.id,
+                  target: { taskId: task.id, checklistItemId: created.id },
+                })
+              } catch (err) {
+                toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+              }
+            }
           } catch (err) {
             toast.error(`Failed to create checklist item: ${err instanceof Error ? err.message : 'Unknown error'}`)
           }
         }
+        await queryClient.invalidateQueries({ queryKey: attachmentKeys.task(task.id) })
         queryClient.invalidateQueries({ queryKey: taskKeys.all(projectId) })
       }
 
@@ -339,8 +370,9 @@ export function CreateTaskDialog({
                           <div
                             ref={provided.innerRef}
                             {...provided.draggableProps}
-                            className="flex items-center gap-2 rounded-md bg-muted px-2 py-1.5 text-sm"
+                            className="rounded-md bg-muted px-2 py-1.5 text-sm"
                           >
+                            <div className="flex items-center gap-2">
                             <div {...provided.dragHandleProps} className="shrink-0 cursor-grab text-muted-foreground">
                               <GripVertical className="h-3.5 w-3.5" />
                             </div>
@@ -353,7 +385,7 @@ export function CreateTaskDialog({
                                 onBlur={() => {
                                   const trimmed = editingChecklistDraft.trim()
                                   if (trimmed) {
-                                    setChecklistItems((prev) => prev.map((v, idx) => idx === i ? trimmed : v))
+                                    setChecklistItems((prev) => prev.map((v, idx) => idx === i ? { ...v, title: trimmed } : v))
                                   }
                                   setEditingChecklistIndex(null)
                                 }}
@@ -367,13 +399,24 @@ export function CreateTaskDialog({
                               <span
                                 className="flex-1 min-w-0 wrap-break-word cursor-default"
                                 onDoubleClick={() => {
-                                  setEditingChecklistDraft(item)
+                                  setEditingChecklistDraft(item.title)
                                   setEditingChecklistIndex(i)
                                 }}
                               >
-                                {item}
+                                {item.title}
                               </span>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPendingChecklistIndex(i)
+                                checklistFileInputRef.current?.click()
+                              }}
+                              title="Attach file"
+                              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Paperclip className="h-3.5 w-3.5" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => setChecklistItems((prev) => prev.filter((_, idx) => idx !== i))}
@@ -381,6 +424,19 @@ export function CreateTaskDialog({
                             >
                               <X className="h-3 w-3" />
                             </button>
+                            </div>
+
+                            {item.files.length > 0 && (
+                              <div className="ml-6 mt-1 flex flex-wrap gap-2">
+                                {item.files.map((file, fi) => (
+                                  <StagedFileTile
+                                    key={`${file.name}-${fi}`}
+                                    file={file}
+                                    onRemove={() => setChecklistItems((prev) => prev.map((it, idx) => idx === i ? { ...it, files: it.files.filter((_, x) => x !== fi) } : it))}
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </Draggable>
@@ -398,12 +454,22 @@ export function CreateTaskDialog({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && newChecklistTitle.trim()) {
                 e.preventDefault()
-                setChecklistItems((prev) => [...prev, newChecklistTitle.trim()])
+                setChecklistItems((prev) => [...prev, { title: newChecklistTitle.trim(), files: [] }])
                 setNewChecklistTitle('')
               }
             }}
             placeholder="Add checklist item..."
             className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-inset"
+          />
+          <input
+            ref={checklistFileInputRef}
+            type="file"
+            multiple
+            onChange={(e) => {
+              if (e.target.files) handleAttachToChecklist(e.target.files)
+              e.target.value = ''
+            }}
+            className="hidden"
           />
         </div>
 

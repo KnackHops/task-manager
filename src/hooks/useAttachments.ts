@@ -39,7 +39,9 @@ export function useUploadAttachment(taskId?: string) {
     }: {
       file: File
       uploadedBy: string
-      target: { taskId: string } | { commentId: string }
+      target:
+        | { taskId: string; checklistItemId?: string }
+        | { commentId: string; commentChecklistItemId?: string }
     }) => uploadAttachment(file, uploadedBy, target),
     onSuccess: (_data, variables) => {
       const { target } = variables

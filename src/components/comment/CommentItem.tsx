@@ -9,6 +9,7 @@ import { ReactionBar } from './ReactionBar'
 import { useToggleReaction } from '@/hooks/useComments'
 import { InlineCommentImage } from './InlineCommentImage'
 import { InlineFileLink } from './InlineFileLink'
+import { CommentChecklistSection } from './CommentChecklistSection'
 import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import {
   DragDropContext,
@@ -358,6 +359,9 @@ export function CommentItem({
               </div>
             )}
 
+            {/* Checklist (editable) */}
+            <CommentChecklistSection commentId={comment.id} canToggle={isOwn} editable={isOwn} />
+
             <div className="flex items-center gap-2">
               <button
                 onClick={handleSave}
@@ -395,6 +399,11 @@ export function CommentItem({
           <div className="mt-0.5 text-sm text-foreground whitespace-pre-wrap wrap-break-word">
             {segments.map((seg, i) => renderSeg(seg, i))}
           </div>
+        )}
+
+        {/* Comment checklist (view mode) */}
+        {!editing && (
+          <CommentChecklistSection commentId={comment.id} canToggle={isOwn} editable={false} />
         )}
 
         {/* Comment attachments (view mode) */}

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { Upload, X } from 'lucide-react'
+import { Upload, X, Paperclip } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { useUploadAttachment, attachmentKeys } from '@/hooks/useAttachments'
@@ -11,9 +11,12 @@ import { copyAttachment } from '@/services/attachments'
 interface FileUploadProps {
   taskId?: string
   commentId?: string
+  checklistItemId?: string
+  commentChecklistItemId?: string
+  compact?: boolean
 }
 
-export function FileUpload({ taskId, commentId }: FileUploadProps) {
+export function FileUpload({ taskId, commentId, checklistItemId, commentChecklistItemId, compact }: FileUploadProps) {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const upload = useUploadAttachment(taskId)
@@ -25,9 +28,9 @@ export function FileUpload({ taskId, commentId }: FileUploadProps) {
     async (files: FileList | File[]) => {
       if (!user) return
       const target = taskId
-        ? { taskId }
+        ? { taskId, ...(checklistItemId ? { checklistItemId } : {}) }
         : commentId
-          ? { commentId }
+          ? { commentId, ...(commentChecklistItemId ? { commentChecklistItemId } : {}) }
           : null
       if (!target) return
 
@@ -55,7 +58,7 @@ export function FileUpload({ taskId, commentId }: FileUploadProps) {
         }
       }
     },
-    [user, taskId, commentId, upload]
+    [user, taskId, commentId, checklistItemId, commentChecklistItemId, upload]
   )
 
   const handleDrop = useCallback(
@@ -101,7 +104,7 @@ export function FileUpload({ taskId, commentId }: FileUploadProps) {
         processFiles(e.dataTransfer.files)
       }
     },
-    [processFiles, user, taskId, commentId, queryClient]
+    [processFiles, user, taskId, commentId, checklistItemId, commentChecklistItemId, queryClient]
   )
 
   const handleFileChange = useCallback(
@@ -113,6 +116,36 @@ export function FileUpload({ taskId, commentId }: FileUploadProps) {
     },
     [processFiles]
   )
+
+  const hiddenInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      multiple
+      onChange={handleFileChange}
+      className="hidden"
+    />
+  )
+
+  if (compact) {
+    return (
+      <span className="inline-flex items-center">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          title="Attach file"
+          className="text-muted-foreground/40 transition-colors hover:text-foreground"
+        >
+          {uploading.length > 0 ? (
+            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          ) : (
+            <Paperclip className="h-3.5 w-3.5" />
+          )}
+        </button>
+        {hiddenInput}
+      </span>
+    )
+  }
 
   return (
     <div>
