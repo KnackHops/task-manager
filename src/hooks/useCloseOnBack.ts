@@ -6,7 +6,7 @@ export function useCloseOnBack(onClose: () => void) {
   const cb = useRef(onClose)
   cb.current = onClose // keep latest without re-running the mount effect
   const pushed = useRef(false)
-  const backTimer = useRef<ReturnType<typeof setTimeout>>()
+  const backTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => {
     clearTimeout(backTimer.current) // StrictMode remount: cancel the phantom-cleanup back()
     if (!pushed.current) {
