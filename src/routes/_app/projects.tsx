@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { Plus, Star } from 'lucide-react'
 import { AppShell } from '@/components/layout/AppShell'
@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { useMyProjects } from '@/hooks/useProjects'
 import { useToggleFavorite } from '@/hooks/useMembers'
 import { CreateProjectDialog } from '@/components/project/CreateProjectDialog'
+import { PendingInviteDialog } from '@/components/project/PendingInviteDialog'
 import type { ProjectListItem } from '@/types/database'
 
 export const Route = createFileRoute('/_app/projects')({
@@ -19,42 +20,88 @@ function ProjectCard({
   project: ProjectListItem
   onToggleFavorite: (projectId: string, isFavorite: boolean) => void
 }) {
+  const navigate = useNavigate()
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const pending = project.membership.status === 'pending'
+
+  const cardBody = (
+    <>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-lg">
+          {project.name.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <h3 className="font-semibold text-foreground">{project.name}</h3>
+          <p className="text-xs text-muted-foreground">/{project.slug}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        {pending ? (
+          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 font-medium text-amber-600">
+            Pending Invitation
+          </span>
+        ) : (
+          <>
+            <span>{project.task_count} tasks</span>
+            <span>{project.member_count} members</span>
+            <span className="capitalize">{project.membership.role}</span>
+          </>
+        )}
+      </div>
+    </>
+  )
+
   return (
     <div className="group relative rounded-lg border border-border bg-card p-4 hover:border-primary/50 transition-colors">
-      <button
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          onToggleFavorite(project.id, !project.membership.is_favorite)
-        }}
-        className="absolute top-3 right-3 text-muted-foreground hover:text-yellow-500 transition-colors"
-      >
-        <Star
-          className={`h-4 w-4 ${project.membership.is_favorite ? 'fill-yellow-500 text-yellow-500' : ''}`}
+      {!pending && (
+        <button
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onToggleFavorite(project.id, !project.membership.is_favorite)
+          }}
+          className="absolute top-3 right-3 text-muted-foreground hover:text-yellow-500 transition-colors"
+        >
+          <Star
+            className={`h-4 w-4 ${project.membership.is_favorite ? 'fill-yellow-500 text-yellow-500' : ''}`}
+          />
+        </button>
+      )}
+
+      {pending ? (
+        <button
+          type="button"
+          onClick={() => setInviteOpen(true)}
+          className="block w-full text-left"
+        >
+          {cardBody}
+        </button>
+      ) : (
+        <Link
+          to="/p/$slug"
+          params={{ slug: project.slug }}
+          search={{ task: undefined, sprint: undefined }}
+        >
+          {cardBody}
+        </Link>
+      )}
+
+      {inviteOpen && (
+        <PendingInviteDialog
+          open
+          onClose={() => setInviteOpen(false)}
+          membershipId={project.membership.id}
+          projectName={project.name}
+          onAccepted={() =>
+            navigate({
+              to: '/p/$slug',
+              params: { slug: project.slug },
+              search: { task: undefined, sprint: undefined },
+            })
+          }
         />
-      </button>
-
-      <Link
-        to="/p/$slug"
-        params={{ slug: project.slug }}
-        search={{ task: undefined, sprint: undefined }}
-      >
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-lg">
-            {project.name.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <h3 className="font-semibold text-foreground">{project.name}</h3>
-            <p className="text-xs text-muted-foreground">/{project.slug}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>{project.task_count} tasks</span>
-          <span>{project.member_count} members</span>
-          <span className="capitalize">{project.membership.role}</span>
-        </div>
-      </Link>
+      )}
     </div>
   )
 }

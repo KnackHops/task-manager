@@ -6,6 +6,7 @@ import { ProjectProvider } from '@/contexts/ProjectContext'
 import { AppShell } from '@/components/layout/AppShell'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PendingInviteDialog } from '@/components/project/PendingInviteDialog'
 import { AlertTriangle, RotateCcw, Trash2 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/p/$slug')({
@@ -52,6 +53,29 @@ function ProjectLayout() {
             Back to projects
           </button>
         </div>
+      </AppShell>
+    )
+  }
+
+  if (project.membership.status === 'pending') {
+    return (
+      <AppShell>
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+          <p className="text-sm mb-4">You have a pending invitation to this project.</p>
+        </div>
+        <PendingInviteDialog
+          open
+          onClose={() => navigate({ to: '/projects' })}
+          onAccepted={() =>
+            navigate({
+              to: '/p/$slug',
+              params: { slug },
+              search: { task: undefined, sprint: undefined },
+            })
+          }
+          membershipId={project.membership.id}
+          projectName={project.name}
+        />
       </AppShell>
     )
   }
