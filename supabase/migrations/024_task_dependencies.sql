@@ -19,7 +19,7 @@ create policy "task_dependencies_select" on public.task_dependencies for select 
     select 1 from public.tasks t
     join public.project_members pm on pm.project_id = t.project_id
     where t.id = task_dependencies.task_id and pm.user_id = auth.uid()
-  )image.png
+  )
 );
 
 create policy "task_dependencies_insert" on public.task_dependencies for insert with check (
