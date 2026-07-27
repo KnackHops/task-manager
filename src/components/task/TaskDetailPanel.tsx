@@ -34,6 +34,7 @@ import { formatDistanceToNow } from "date-fns";
 import { TaskTimerButton } from "@/components/task/TaskTimerButton";
 import { useTaskTotal } from "@/hooks/useTimeTracking";
 import { formatDuration } from "@/lib/time-format";
+import { useCloseOnBack } from "@/hooks/useCloseOnBack";
 
 interface TaskDetailPanelProps {
   taskId: string;
@@ -65,6 +66,8 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
   const { data: taskTotalSeconds } = useTaskTotal(user?.id, taskId);
   const uploadAttachment = useUploadAttachment(taskId);
   const { data: taskAttachments } = useTaskAttachments(taskId);
+
+  useCloseOnBack(onClose);
 
   const [title, setTitle] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
