@@ -5,9 +5,9 @@ import type { RequestContext } from '../auth.js'
 export function registerUpdateChecklistItem(server: McpServer, ctx: RequestContext) {
   server.tool(
     'update_checklist_item',
-    'Update a checklist item (toggle done, edit title). Use item IDs from get_task output.',
+    'Update a checklist item (toggle done, edit title). Works on task checklists and on checklists inside a comment. Use item IDs from get_task output.',
     {
-      item_id: z.string().describe('Checklist item UUID (from get_task output)'),
+      item_id: z.string().describe('Checklist item UUID (from get_task output, task or comment checklist)'),
       is_done: z.boolean().optional().describe('Mark done or not done'),
       title: z.string().optional().describe('New title'),
     },
@@ -20,12 +20,25 @@ export function registerUpdateChecklistItem(server: McpServer, ctx: RequestConte
           return { content: [{ type: 'text' as const, text: 'Error: provide is_done or title' }], isError: true }
         }
 
-        const { data, error } = await ctx.supabase
-          .from('task_checklist_items')
-          .update(updates)
-          .eq('id', args.item_id)
-          .select('id, title, is_done, position')
-          .single()
+        // Task and comment checklist IDs come from disjoint tables — try task first, fall back to comment.
+        const apply = (table: string) =>
+          ctx.supabase.from(table).update(updates).eq('id', args.item_id).select('id, title, is_done').maybeSingle()
+
+        let { data, error } = await apply('task_checklist_items')
+        if (!error && !data) {
+          const commentResult = await apply('comment_checklist_items')
+          data = commentResult.data
+          error = commentResult.error
+          if (!error && !data) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: 'Error: checklist item not found, or you are not the author of the comment it belongs to (comment checklists are editable only by their comment author).',
+              }],
+              isError: true,
+            }
+          }
+        }
 
         if (error) {
           return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }], isError: true }
