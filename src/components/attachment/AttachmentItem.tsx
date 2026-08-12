@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Download, Trash2, FileText, FileArchive, FileImage, File, GripVertical } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { ImageLightbox } from './ImageLightbox'
 import { formatFileSize, isImageType, getFileExtension } from '@/lib/file-utils'
 import { getSignedUrl } from '@/services/attachments'
 import { formatDistanceToNow } from 'date-fns'
@@ -11,6 +12,8 @@ interface AttachmentItemProps {
   attachment: AttachmentWithUploader
   canDelete: boolean
   onDelete: (id: string, storagePath: string) => void
+  /** When set, image clicks hand off to the parent's carousel instead of the local lightbox. */
+  onPreview?: () => void
   compact?: boolean
   dragHandleProps?: DraggableProvidedDragHandleProps | null
 }
@@ -29,6 +32,7 @@ export function AttachmentItem({
   attachment,
   canDelete,
   onDelete,
+  onPreview,
   compact = false,
   dragHandleProps,
 }: AttachmentItemProps) {
@@ -50,7 +54,8 @@ export function AttachmentItem({
     }
   }
 
-  const handleDownload = async () => {
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation()
     const url = await loadUrl()
     if (url) {
       const a = document.createElement('a')
@@ -61,6 +66,10 @@ export function AttachmentItem({
   }
 
   const handlePreview = async () => {
+    if (onPreview) {
+      onPreview()
+      return
+    }
     await loadUrl()
     setLightbox(true)
   }
@@ -86,10 +95,12 @@ export function AttachmentItem({
 
   if (compact) {
     return (
+      <>
       <div
         className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-1.5 text-xs cursor-pointer hover:bg-muted/60 hover:border-primary/30 transition-colors"
         draggable
         onDragStart={handleDragStart}
+        onClick={isImage ? handlePreview : undefined}
       >
         {dragHandleProps && (
           <div
@@ -108,24 +119,37 @@ export function AttachmentItem({
         </button>
         {canDelete && (
           <button
-            onClick={() => setDeleteConfirm(true)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setDeleteConfirm(true)
+            }}
             className="text-muted-foreground hover:text-destructive transition-colors"
           >
             <Trash2 className="h-3 w-3" />
           </button>
         )}
-        <ConfirmDialog
-          open={deleteConfirm}
-          onClose={() => setDeleteConfirm(false)}
-          onConfirm={() => {
-            onDelete(attachment.id, attachment.storage_path)
-            setDeleteConfirm(false)
-          }}
-          title="Delete attachment"
-          description={`Delete "${attachment.file_name}"? This cannot be undone.`}
-          confirmLabel="Delete"
-        />
       </div>
+
+      <ConfirmDialog
+        open={deleteConfirm}
+        onClose={() => setDeleteConfirm(false)}
+        onConfirm={() => {
+          onDelete(attachment.id, attachment.storage_path)
+          setDeleteConfirm(false)
+        }}
+        title="Delete attachment"
+        description={`Delete "${attachment.file_name}"? This cannot be undone.`}
+        confirmLabel="Delete"
+      />
+
+      {lightbox && (
+        <ImageLightbox
+          images={[attachment]}
+          startIndex={0}
+          onClose={() => setLightbox(false)}
+        />
+      )}
+      </>
     )
   }
 
@@ -135,6 +159,7 @@ export function AttachmentItem({
         className="group flex items-center gap-3 rounded-lg border border-border bg-card p-2 cursor-pointer hover:border-primary/30 hover:bg-accent/50 transition-colors"
         draggable
         onDragStart={handleDragStart}
+        onClick={isImage ? handlePreview : undefined}
       >
         {dragHandleProps && (
           <div
@@ -147,7 +172,10 @@ export function AttachmentItem({
         )}
         {isImage && imageUrl ? (
           <button
-            onClick={handlePreview}
+            onClick={(e) => {
+              e.stopPropagation()
+              handlePreview()
+            }}
             className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted"
           >
             <img
@@ -182,7 +210,10 @@ export function AttachmentItem({
           </button>
           {canDelete && (
             <button
-              onClick={() => setDeleteConfirm(true)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setDeleteConfirm(true)
+              }}
               className="rounded p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             >
               <Trash2 className="h-4 w-4" />
@@ -203,18 +234,13 @@ export function AttachmentItem({
         confirmLabel="Delete"
       />
 
-      {/* Lightbox */}
-      {lightbox && imageUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
-          onClick={() => setLightbox(false)}
-        >
-          <img
-            src={imageUrl}
-            alt={attachment.file_name}
-            className="max-h-full max-w-full rounded-lg object-contain"
-          />
-        </div>
+      {/* Lightbox (only when no parent carousel took over) */}
+      {lightbox && (
+        <ImageLightbox
+          images={[attachment]}
+          startIndex={0}
+          onClose={() => setLightbox(false)}
+        />
       )}
     </>
   )

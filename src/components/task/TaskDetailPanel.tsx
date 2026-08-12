@@ -75,6 +75,10 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
     const saved = localStorage.getItem("taskDetailPanelDetailsOpen");
     return saved === null ? true : saved === "true";
   });
+  const [attachmentsOpen, setAttachmentsOpen] = useState(() => {
+    const saved = localStorage.getItem("taskDetailPanelAttachmentsOpen");
+    return saved === null ? false : saved === "true";
+  });
   const [descRaw, setDescRaw] = useState('');
   const inlineImagesRef = useRef<Map<string, File>>(new Map());
   const commentFormNodeRef = useRef<HTMLDivElement | null>(null);
@@ -462,12 +466,33 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
             canEdit={canEditTask}
           />
 
-          {/* Attachments */}
+          {/* Attachments (collapsible) */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Attachments</label>
-            <div className="mt-1">
-              <AttachmentList taskId={taskId} />
-            </div>
+            <button
+              onClick={() =>
+                setAttachmentsOpen((prev) => {
+                  const next = !prev;
+                  localStorage.setItem("taskDetailPanelAttachmentsOpen", String(next));
+                  return next;
+                })
+              }
+              className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <span>Attachments</span>
+                {(taskAttachments?.length ?? 0) > 0 && (
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground normal-case tracking-normal">
+                    {taskAttachments!.length}
+                  </span>
+                )}
+              </span>
+              {attachmentsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </button>
+            {attachmentsOpen && (
+              <div className="mt-2">
+                <AttachmentList taskId={taskId} />
+              </div>
+            )}
           </div>
 
           {/* Meta info */}
@@ -599,22 +624,17 @@ export function TaskDetailPanel({ taskId, projectId, onClose }: TaskDetailPanelP
 
         {/* Comments */}
         <div className="mt-6 border-t border-border pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Comments</h3>
-            <button
-              type="button"
-              onClick={() => {
-                commentFormNodeRef.current?.scrollIntoView({ behavior: "smooth" });
-                setTimeout(() => {
-                  commentFormNodeRef.current?.querySelector<HTMLDivElement>("[contenteditable]")?.focus();
-                }, 300);
-              }}
-              className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
-            >
-              Reply
-            </button>
-          </div>
-          <CommentList ref={commentFormRef} taskId={taskId} projectId={projectId} />
+          <CommentList
+            ref={commentFormRef}
+            taskId={taskId}
+            projectId={projectId}
+            onReply={() => {
+              commentFormNodeRef.current?.scrollIntoView({ behavior: "smooth" });
+              setTimeout(() => {
+                commentFormNodeRef.current?.querySelector<HTMLDivElement>("[contenteditable]")?.focus();
+              }, 300);
+            }}
+          />
         </div>
       </div>
 

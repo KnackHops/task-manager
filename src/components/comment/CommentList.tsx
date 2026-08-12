@@ -1,6 +1,6 @@
-import { useMemo, useState, forwardRef } from 'react'
+import { useMemo, useState, useRef, useCallback, forwardRef } from 'react'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { ArrowDown, ChevronUp, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useComments, useUpdateComment, useDeleteComment } from '@/hooks/useComments'
 import { useMembers } from '@/hooks/useMembers'
@@ -11,10 +11,12 @@ import { CommentForm } from './CommentForm'
 interface CommentListProps {
   taskId: string
   projectId: string
+  /** Renders the "Reply" action in the header row when provided. */
+  onReply?: () => void
 }
 
 export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
-  function CommentList({ taskId, projectId }, ref) {
+  function CommentList({ taskId, projectId, onReply }, ref) {
     const { user } = useAuth()
     const {
       data,
@@ -39,15 +41,41 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
 
     const totalCount = data?.pages[0]?.totalCount
     const loadedCount = comments.length
-    const remaining = totalCount != null ? totalCount - loadedCount : undefined
 
-    // Collapsed by default: show only the newest few comments. "View all" reveals
-    // the full loaded thread (and the existing load-previous paging for older ones).
+    // Collapsed by default: show only the newest few comments, then reveal them
+    // in small batches instead of dumping the whole thread at once.
     const VISIBLE = 4
-    const [expanded, setExpanded] = useState(false)
+    const STEP = 5
+    const [visibleCount, setVisibleCount] = useState(VISIBLE)
     const knownCount = totalCount ?? loadedCount
-    const isTruncated = !expanded && knownCount > VISIBLE
-    const visibleComments = isTruncated ? comments.slice(-VISIBLE) : comments
+    const shownCount = Math.min(visibleCount, loadedCount)
+    const hiddenCount = Math.max(0, knownCount - shownCount)
+    const nextBatch = Math.min(STEP, hiddenCount)
+    const visibleComments = comments.slice(-shownCount)
+
+    const isExpanded = shownCount > VISIBLE
+    const bottomRef = useRef<HTMLDivElement>(null)
+
+    const handleShowMore = () => {
+      const next = shownCount + STEP
+      setVisibleCount(next)
+      // Pull the next page when the reveal outruns what's loaded
+      if (next > loadedCount && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage()
+      }
+    }
+
+    const scrollToLatest = useCallback(() => {
+      // Wait a frame so any collapse has re-laid out before scrolling
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+    }, [])
+
+    const handleCollapse = () => {
+      setVisibleCount(VISIBLE)
+      scrollToLatest()
+    }
 
     const handleEdit = async (commentId: string, body: string) => {
       try {
@@ -63,44 +91,81 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
       })
     }
 
+    // Thread controls live inline in the header row, between the title and Reply
+    const controls = isLoading ? null : (
+      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-center gap-x-2.5 gap-y-1">
+        {hiddenCount > 0 && (
+          <button
+            onClick={handleShowMore}
+            disabled={isFetchingNextPage}
+            className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium transition-colors disabled:opacity-60"
+          >
+            {isFetchingNextPage ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <>
+                Show {nextBatch} more
+                <span className="text-muted-foreground">({hiddenCount} hidden)</span>
+              </>
+            )}
+          </button>
+        )}
+        {isExpanded && (
+          <>
+            {hiddenCount > 0 && <span className="text-xs text-border">|</span>}
+            <button
+              onClick={handleCollapse}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium transition-colors"
+            >
+              <ChevronUp className="h-3.5 w-3.5" />
+              Collapse
+            </button>
+            <span className="text-xs text-border">|</span>
+            <button
+              onClick={scrollToLatest}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium transition-colors"
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+              Latest
+            </button>
+          </>
+        )}
+      </div>
+    )
+
+    const header = (
+      <div className="mb-3 flex items-center gap-3">
+        <h3 className="shrink-0 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+          Comments
+        </h3>
+        {controls}
+        {onReply && (
+          <button
+            type="button"
+            onClick={onReply}
+            className="shrink-0 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+          >
+            Reply
+          </button>
+        )}
+      </div>
+    )
+
     if (isLoading) {
       return (
-        <div className="flex items-center justify-center py-6">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div>
+          {header}
+          <div className="flex items-center justify-center py-6">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          </div>
         </div>
       )
     }
 
     return (
       <div>
+        {header}
         <div className="divide-y divide-border">
-          {isTruncated && (
-            <div className="flex justify-center py-2">
-              <button
-                onClick={() => setExpanded(true)}
-                className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
-              >
-                View all {knownCount} comments
-              </button>
-            </div>
-          )}
-          {expanded && hasNextPage && (
-            <div className="flex justify-center py-2">
-              <button
-                onClick={() => fetchNextPage()}
-                disabled={isFetchingNextPage}
-                className="flex items-center gap-2 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
-              >
-                {isFetchingNextPage ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : remaining != null && remaining > 0 ? (
-                  `Load ${remaining} previous comments`
-                ) : (
-                  'Load previous comments'
-                )}
-              </button>
-            </div>
-          )}
           {comments.length > 0 ? (
             visibleComments.map((comment) => (
               <CommentItem
@@ -119,6 +184,22 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
             </p>
           )}
         </div>
+
+        {/* Anchor for "Latest" + a collapse control reachable from the bottom */}
+        <div ref={bottomRef} className="scroll-mt-4">
+          {isExpanded && (
+            <div className="flex justify-center py-2">
+              <button
+                onClick={handleCollapse}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium transition-colors"
+              >
+                <ChevronUp className="h-3.5 w-3.5" />
+                Collapse comments
+              </button>
+            </div>
+          )}
+        </div>
+
         <div ref={ref}>
           <CommentForm taskId={taskId} projectId={projectId} />
         </div>
