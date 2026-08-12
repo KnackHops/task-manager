@@ -26,7 +26,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
-import { FILE_SIZE_LIMIT, formatFileSize } from '@/lib/file-utils'
+import { FILE_SIZE_LIMIT, formatFileSize, isImageType } from '@/lib/file-utils'
+import { ImageLightbox } from '@/components/attachment/ImageLightbox'
 import { replaceInlineTempId, removeInlineTempId } from '@/lib/rich-editor'
 import type { CommentWithAuthor, ProjectMemberWithProfile, AttachmentWithUploader } from '@/types/database'
 
@@ -71,6 +72,14 @@ export function CommentItem({
     () => [...(attachments ?? []), ...taskAttachments],
     [attachments, taskAttachments]
   )
+
+  // Carousel across this comment's own images
+  const commentImages = useMemo(
+    () => (attachments ?? []).filter((a) => isImageType(a.file_type)),
+    [attachments]
+  )
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const previewIndex = previewId ? commentImages.findIndex((a) => a.id === previewId) : -1
 
   const memberMap = useMemo(() => {
     const map = new Map<string, { fullName: string; email: string }>()
@@ -319,6 +328,7 @@ export function CommentItem({
                                     { onError: (err) => toast.error(err.message) }
                                   )
                                 }
+                                onPreview={() => setPreviewId(a.id)}
                                 compact
                                 dragHandleProps={provided.dragHandleProps}
                               />
@@ -423,6 +433,7 @@ export function CommentItem({
                       { onError: (err) => toast.error(err.message) }
                     )
                   }
+                  onPreview={() => setPreviewId(a.id)}
                   compact
                 />
               ))}
@@ -459,6 +470,14 @@ export function CommentItem({
         description="Delete this comment? This cannot be undone."
         confirmLabel="Delete"
       />
+
+      {previewIndex >= 0 && (
+        <ImageLightbox
+          images={commentImages}
+          startIndex={previewIndex}
+          onClose={() => setPreviewId(null)}
+        />
+      )}
     </div>
   )
 }

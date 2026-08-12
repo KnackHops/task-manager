@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   DragDropContext,
@@ -13,6 +14,8 @@ import {
 } from '@/hooks/useAttachments'
 import { AttachmentItem } from './AttachmentItem'
 import { FileUpload } from './FileUpload'
+import { ImageLightbox } from './ImageLightbox'
+import { isImageType } from '@/lib/file-utils'
 
 interface AttachmentListProps {
   taskId: string
@@ -23,6 +26,14 @@ export function AttachmentList({ taskId }: AttachmentListProps) {
   const { data: attachments, isLoading } = useTaskAttachments(taskId)
   const deleteAttachment = useDeleteAttachment(taskId)
   const reorderAttachments = useReorderAttachments(taskId)
+
+  // Carousel pages through every image on the task, not just the clicked one
+  const images = useMemo(
+    () => (attachments ?? []).filter((a) => isImageType(a.file_type)),
+    [attachments]
+  )
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const previewIndex = previewId ? images.findIndex((a) => a.id === previewId) : -1
 
   const handleDelete = (id: string, storagePath: string) => {
     deleteAttachment.mutate(
@@ -68,6 +79,7 @@ export function AttachmentList({ taskId }: AttachmentListProps) {
                           attachment={a}
                           canDelete={user?.id === a.uploaded_by}
                           onDelete={handleDelete}
+                          onPreview={() => setPreviewId(a.id)}
                           dragHandleProps={provided.dragHandleProps}
                         />
                       </div>
@@ -82,6 +94,14 @@ export function AttachmentList({ taskId }: AttachmentListProps) {
       ) : null}
 
       <FileUpload taskId={taskId} />
+
+      {previewIndex >= 0 && (
+        <ImageLightbox
+          images={images}
+          startIndex={previewIndex}
+          onClose={() => setPreviewId(null)}
+        />
+      )}
     </div>
   )
 }
