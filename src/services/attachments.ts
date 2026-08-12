@@ -6,7 +6,10 @@ const BUCKET = 'attachments'
 export async function uploadAttachment(
   file: File,
   uploadedBy: string,
-  target: { taskId: string } | { commentId: string } | 'orphan'
+  target:
+    | { taskId: string; checklistItemId?: string }
+    | { commentId: string; commentChecklistItemId?: string }
+    | 'orphan'
 ): Promise<AttachmentWithUploader> {
   const ext = file.name.split('.').pop() ?? ''
   const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -25,6 +28,8 @@ export async function uploadAttachment(
     .insert({
       task_id: target !== 'orphan' && 'taskId' in target ? target.taskId : null,
       comment_id: target !== 'orphan' && 'commentId' in target ? target.commentId : null,
+      checklist_item_id: target !== 'orphan' && 'taskId' in target ? target.checklistItemId ?? null : null,
+      comment_checklist_item_id: target !== 'orphan' && 'commentId' in target ? target.commentChecklistItemId ?? null : null,
       uploaded_by: uploadedBy,
       file_name: file.name,
       file_type: file.type,
@@ -117,7 +122,10 @@ export async function copyAttachment(
   fileName: string,
   fileType: string,
   fileSize: number,
-  target: { taskId: string } | { commentId: string } | 'orphan'
+  target:
+    | { taskId: string; checklistItemId?: string }
+    | { commentId: string; commentChecklistItemId?: string }
+    | 'orphan'
 ): Promise<AttachmentWithUploader> {
   const ext = fileName.split('.').pop() ?? ''
   const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -136,6 +144,8 @@ export async function copyAttachment(
     .insert({
       task_id: target !== 'orphan' && 'taskId' in target ? target.taskId : null,
       comment_id: target !== 'orphan' && 'commentId' in target ? target.commentId : null,
+      checklist_item_id: target !== 'orphan' && 'taskId' in target ? target.checklistItemId ?? null : null,
+      comment_checklist_item_id: target !== 'orphan' && 'commentId' in target ? target.commentChecklistItemId ?? null : null,
       uploaded_by: uploadedBy,
       file_name: fileName,
       file_type: fileType,

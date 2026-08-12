@@ -139,6 +139,16 @@ export interface ChecklistItem {
   updated_at: string
 }
 
+export interface CommentChecklistItem {
+  id: string
+  comment_id: string
+  title: string
+  is_done: boolean
+  position: number
+  created_at: string
+  updated_at: string
+}
+
 export interface TaskWithRelations extends Task {
   assignees?: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>[]
   creator?: Pick<Profile, 'id' | 'full_name' | 'avatar_url'> | null
@@ -191,6 +201,8 @@ export interface Attachment {
   id: string
   task_id: string | null
   comment_id: string | null
+  checklist_item_id: string | null
+  comment_checklist_item_id: string | null
   uploaded_by: string | null
   file_name: string
   file_type: string

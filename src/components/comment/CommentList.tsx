@@ -13,10 +13,11 @@ interface CommentListProps {
   projectId: string
   /** Renders the "Reply" action in the header row when provided. */
   onReply?: () => void
+  readOnly?: boolean
 }
 
 export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
-  function CommentList({ taskId, projectId, onReply }, ref) {
+  function CommentList({ taskId, projectId, onReply, readOnly = false }, ref) {
     const { user } = useAuth()
     const {
       data,
@@ -139,7 +140,7 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
           Comments
         </h3>
         {controls}
-        {onReply && (
+        {onReply && !readOnly && (
           <button
             type="button"
             onClick={onReply}
@@ -176,6 +177,7 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
                 taskAttachments={taskAttachments ?? []}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                readOnly={readOnly}
               />
             ))
           ) : (
@@ -200,9 +202,11 @@ export const CommentList = forwardRef<HTMLDivElement, CommentListProps>(
           )}
         </div>
 
-        <div ref={ref}>
-          <CommentForm taskId={taskId} projectId={projectId} />
-        </div>
+        {!readOnly && (
+          <div ref={ref}>
+            <CommentForm taskId={taskId} projectId={projectId} />
+          </div>
+        )}
       </div>
     )
   }

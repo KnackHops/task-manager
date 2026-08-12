@@ -11,6 +11,7 @@ interface ReactionBarProps {
   currentUserId: string | undefined
   memberMap: Map<string, { fullName: string; email: string }>
   onToggle: (emoji: string) => void
+  disabled?: boolean
 }
 
 export function ReactionBar({
@@ -18,6 +19,7 @@ export function ReactionBar({
   currentUserId,
   memberMap,
   onToggle,
+  disabled = false,
 }: ReactionBarProps) {
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -43,13 +45,15 @@ export function ReactionBar({
         <button
           key={emoji}
           type="button"
+          disabled={disabled}
           onClick={() => onToggle(emoji)}
           title={g.names.join(', ')}
           className={cn(
             'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition-colors',
             g.mine
               ? 'border-primary/40 bg-primary/10 text-primary'
-              : 'border-border bg-muted text-muted-foreground hover:bg-accent'
+              : 'border-border bg-muted text-muted-foreground',
+            disabled ? 'cursor-default' : 'hover:bg-accent'
           )}
         >
           <span>{emoji}</span>
@@ -57,7 +61,7 @@ export function ReactionBar({
         </button>
       ))}
 
-      <div className="relative">
+      {!disabled && <div className="relative">
         <button
           type="button"
           onClick={() => setPickerOpen((o) => !o)}
@@ -93,7 +97,7 @@ export function ReactionBar({
             </div>
           </>
         )}
-      </div>
+      </div>}
     </div>
   )
 }

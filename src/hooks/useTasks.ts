@@ -25,7 +25,10 @@ export const taskKeys = {
   archived: (
     projectId: string,
     filters?: { search?: string; sprintId?: string | null }
-  ) => ['tasks', projectId, 'archived', filters] as const,
+  ) => ['tasks-archived', projectId, filters] as const,
+  // Distinct root from `all` so array optimistic updaters never prefix-match the
+  // archived infinite query (object cache). Prefix used for invalidation.
+  archivedAll: (projectId: string) => ['tasks-archived', projectId] as const,
   detail: (taskId: string) => ['task', taskId] as const,
 }
 
@@ -176,7 +179,7 @@ export function useArchiveTask(projectId: string) {
 
     onSettled: (_data, _err, taskId) => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all(projectId) })
-      queryClient.invalidateQueries({ queryKey: taskKeys.archived(projectId) })
+      queryClient.invalidateQueries({ queryKey: taskKeys.archivedAll(projectId) })
       queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) })
     },
   })
@@ -225,7 +228,7 @@ export function useUnarchiveTask(projectId: string) {
 
     onSettled: (_data, _err, variables) => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all(projectId) })
-      queryClient.invalidateQueries({ queryKey: taskKeys.archived(projectId) })
+      queryClient.invalidateQueries({ queryKey: taskKeys.archivedAll(projectId) })
       queryClient.invalidateQueries({
         queryKey: taskKeys.detail(variables.taskId),
       })

@@ -15,6 +15,7 @@ interface AttachmentItemProps {
   /** When set, image clicks hand off to the parent's carousel instead of the local lightbox. */
   onPreview?: () => void
   compact?: boolean
+  grid?: boolean
   dragHandleProps?: DraggableProvidedDragHandleProps | null
 }
 
@@ -34,6 +35,7 @@ export function AttachmentItem({
   onDelete,
   onPreview,
   compact = false,
+  grid = false,
   dragHandleProps,
 }: AttachmentItemProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -91,6 +93,63 @@ export function AttachmentItem({
       })
     )
     e.dataTransfer.effectAllowed = 'copy'
+  }
+
+  if (grid) {
+    return (
+      <>
+        <div
+          className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-border bg-muted"
+          draggable
+          onDragStart={handleDragStart}
+          title={attachment.file_name}
+        >
+          <button
+            onClick={isImage ? handlePreview : handleDownload}
+            className="flex h-full w-full items-center justify-center text-muted-foreground"
+          >
+            {isImage && imageUrl ? (
+              <img src={imageUrl} alt={attachment.file_name} className="h-full w-full object-cover" />
+            ) : (
+              <FileIcon fileType={attachment.file_type} fileName={attachment.file_name} />
+            )}
+          </button>
+          {canDelete && (
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="absolute right-0.5 top-0.5 rounded bg-background/70 p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+
+        <ConfirmDialog
+          open={deleteConfirm}
+          onClose={() => setDeleteConfirm(false)}
+          onConfirm={() => {
+            onDelete(attachment.id, attachment.storage_path)
+            setDeleteConfirm(false)
+          }}
+          title="Delete attachment"
+          description={`Delete "${attachment.file_name}"? This cannot be undone.`}
+          confirmLabel="Delete"
+        />
+
+        {lightbox && imageUrl && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
+            onClick={() => setLightbox(false)}
+          >
+            <img
+              src={imageUrl}
+              alt={attachment.file_name}
+              className="max-h-full max-w-full rounded-lg object-contain"
+            />
+          </div>
+        )}
+      </>
+    )
   }
 
   if (compact) {

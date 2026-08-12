@@ -1,15 +1,18 @@
 import { useState, useRef, useCallback } from 'react'
-import { Send, Paperclip, X } from 'lucide-react'
+import { Send, Paperclip, X, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { useMembers } from '@/hooks/useMembers'
 import { useCreateComment } from '@/hooks/useComments'
 import { attachmentKeys } from '@/hooks/useAttachments'
+import { commentChecklistKeys } from '@/hooks/useCommentChecklists'
+import { createCommentChecklistItem } from '@/services/comment-checklists'
 import { useQueryClient } from '@tanstack/react-query'
 import { assignAttachmentsToComment, uploadAttachment as uploadAttachmentRaw } from '@/services/attachments'
 import { FILE_SIZE_LIMIT, formatFileSize } from '@/lib/file-utils'
 import { replaceInlineTempId, removeInlineTempId } from '@/lib/rich-editor'
 import { RichTextEditor } from '@/components/ui/RichTextEditor'
+import { StagedFileTile } from '@/components/attachment/StagedFileTile'
 import { useEditor } from '@tiptap/react'
 
 interface CommentFormProps {
@@ -25,11 +28,30 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
 
   const [commentRaw, setCommentRaw] = useState('')
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
+  const [checklistItems, setChecklistItems] = useState<{ title: string; files: File[] }[]>([])
+  const [newChecklistTitle, setNewChecklistTitle] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const checklistFileInputRef = useRef<HTMLInputElement>(null)
+  const pendingChecklistIndexRef = useRef<number | null>(null)
   // Map temp inline IDs → File for pasted images
   const inlineImagesRef = useRef<Map<string, File>>(new Map())
   const tiptapRef = useRef<ReturnType<typeof useEditor> | null>(null)
+
+  const handleAttachToChecklist = useCallback((files: FileList) => {
+    const idx = pendingChecklistIndexRef.current
+    pendingChecklistIndexRef.current = null
+    if (idx === null) return
+    const arr = Array.from(files)
+    const oversized = arr.filter((f) => f.size > FILE_SIZE_LIMIT)
+    if (oversized.length > 0) {
+      toast.error(`File too large (max ${formatFileSize(FILE_SIZE_LIMIT)}): ${oversized.map((f) => f.name).join(', ')}`)
+    }
+    const valid = arr.filter((f) => f.size <= FILE_SIZE_LIMIT)
+    if (valid.length > 0) {
+      setChecklistItems((prev) => prev.map((it, i) => i === idx ? { ...it, files: [...it.files, ...valid] } : it))
+    }
+  }, [])
 
   const handleAddFiles = useCallback((files: FileList | File[]) => {
     const arr = Array.from(files)
@@ -51,11 +73,16 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
     if (!user) return
     const rawBody = commentRaw.trim()
     const hasInlineImages = inlineImagesRef.current.size > 0
-    if (!rawBody && stagedFiles.length === 0 && !hasInlineImages) return
+    if (!rawBody && stagedFiles.length === 0 && !hasInlineImages && checklistItems.length === 0) return
 
     setSubmitting(true)
     try {
-      let finalBody = rawBody || '(attachment)'
+      const itemsHaveFiles = checklistItems.some((it) => it.files.length > 0)
+      const placeholderParts: string[] = []
+      if (stagedFiles.length > 0 || itemsHaveFiles) placeholderParts.push('attachments')
+      if (checklistItems.length > 0) placeholderParts.push('checklist')
+      const placeholder = placeholderParts.length ? `(${placeholderParts.join(', ')})` : '(attachment)'
+      let finalBody = rawBody || placeholder
       const orphanIds: string[] = []
 
       // Step 1: Upload inline images as orphans (no task_id, no comment_id)
@@ -97,16 +124,39 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
         await queryClient.invalidateQueries({ queryKey: attachmentKeys.comment(comment.id) })
       }
 
+      // Step 5: Create staged checklist items, then upload their staged files
+      if (checklistItems.length > 0) {
+        for (let i = 0; i < checklistItems.length; i++) {
+          const item = checklistItems[i]!
+          try {
+            const created = await createCommentChecklistItem(comment.id, item.title, i)
+            for (const file of item.files) {
+              try {
+                await uploadAttachmentRaw(file, user.id, { commentId: comment.id, commentChecklistItemId: created.id })
+              } catch (err) {
+                toast.error(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+              }
+            }
+          } catch (err) {
+            toast.error(`Failed to create checklist item: ${err instanceof Error ? err.message : 'Unknown error'}`)
+          }
+        }
+        await queryClient.invalidateQueries({ queryKey: commentChecklistKeys.comment(comment.id) })
+        await queryClient.invalidateQueries({ queryKey: attachmentKeys.comment(comment.id) })
+      }
+
       tiptapRef.current?.commands.clearContent()
       setCommentRaw('')
       setStagedFiles([])
+      setChecklistItems([])
+      setNewChecklistTitle('')
       inlineImagesRef.current.clear()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to post comment')
     } finally {
       setSubmitting(false)
     }
-  }, [user, commentRaw, createComment, stagedFiles, queryClient])
+  }, [user, commentRaw, createComment, stagedFiles, checklistItems, queryClient])
 
   return (
     <div className="relative mt-3">
@@ -152,7 +202,7 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={(commentRaw.trim() === '' && stagedFiles.length === 0) || submitting}
+            disabled={(commentRaw.trim() === '' && stagedFiles.length === 0 && checklistItems.length === 0) || submitting}
             className="rounded-lg bg-primary p-2 text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
@@ -195,6 +245,78 @@ export function CommentForm({ taskId, projectId }: CommentFormProps) {
           ))}
         </div>
       )}
+
+      {/* Staged checklist */}
+      <div className="mt-1.5">
+        {checklistItems.length > 0 && (
+          <div className="space-y-0.5">
+            {checklistItems.map((item, i) => (
+              <div key={`${item.title}-${i}`} className="group rounded px-1 py-0.5 text-sm hover:bg-muted/50">
+                <div className="flex items-center gap-2">
+                  <div className="h-3.5 w-3.5 shrink-0 rounded border border-border" />
+                  <span className="min-w-0 flex-1 wrap-break-word">{item.title}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      pendingChecklistIndexRef.current = i
+                      checklistFileInputRef.current?.click()
+                    }}
+                    title="Attach file"
+                    className="shrink-0 text-muted-foreground/40 hover:text-foreground transition-colors"
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChecklistItems((prev) => prev.filter((_, j) => j !== i))}
+                    className="shrink-0 text-muted-foreground/40 hover:text-destructive transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+                {item.files.length > 0 && (
+                  <div className="ml-6 mt-1 flex flex-wrap gap-2">
+                    {item.files.map((file, fi) => (
+                      <StagedFileTile
+                        key={`${file.name}-${fi}`}
+                        file={file}
+                        onRemove={() => setChecklistItems((prev) => prev.map((it, idx) => idx === i ? { ...it, files: it.files.filter((_, x) => x !== fi) } : it))}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2 px-1 py-0.5">
+          <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <input
+            type="text"
+            value={newChecklistTitle}
+            onChange={(e) => setNewChecklistTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newChecklistTitle.trim()) {
+                e.preventDefault()
+                setChecklistItems((prev) => [...prev, { title: newChecklistTitle.trim(), files: [] }])
+                setNewChecklistTitle('')
+              }
+            }}
+            placeholder="Add checklist item..."
+            className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+          />
+        </div>
+        <input
+          ref={checklistFileInputRef}
+          type="file"
+          multiple
+          onChange={(e) => {
+            if (e.target.files) handleAttachToChecklist(e.target.files)
+            e.target.value = ''
+          }}
+          className="hidden"
+        />
+      </div>
 
       <p className="mt-1 text-[10px] text-muted-foreground">
         {/Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘' : 'Ctrl'}+Enter to send

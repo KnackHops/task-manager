@@ -10,6 +10,7 @@ interface AssigneeSelectProps {
   onChange: (ids: string[]) => void
   label?: string
   position?: 'top' | 'bottom'
+  disabled?: boolean
 }
 
 export function AssigneeSelect({
@@ -18,6 +19,7 @@ export function AssigneeSelect({
   onChange,
   label,
   position = 'bottom',
+  disabled = false,
 }: AssigneeSelectProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -51,17 +53,19 @@ export function AssigneeSelect({
       )}
       <div
         role="button"
-        tabIndex={0}
-        onClick={() => setOpen(!open)}
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
+        onClick={() => !disabled && setOpen(!open)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+          if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault()
             setOpen(!open)
           }
         }}
         className={cn(
           'flex min-h-[40px] w-full items-center gap-1 rounded-lg border border-input bg-background px-3 py-1.5 text-sm text-foreground cursor-pointer',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          disabled && 'pointer-events-none opacity-60'
         )}
       >
         <div className="flex flex-1 flex-wrap gap-1">

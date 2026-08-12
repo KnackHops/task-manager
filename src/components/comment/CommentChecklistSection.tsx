@@ -5,42 +5,45 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import {
-  useCreateChecklistItem,
-  useUpdateChecklistItem,
-  useDeleteChecklistItem,
-  useReorderChecklistItems,
-} from '@/hooks/useChecklists'
-import { useTaskAttachments, useDeleteAttachment } from '@/hooks/useAttachments'
+  useCommentChecklist,
+  useCreateCommentChecklistItem,
+  useUpdateCommentChecklistItem,
+  useDeleteCommentChecklistItem,
+  useReorderCommentChecklistItems,
+} from '@/hooks/useCommentChecklists'
+import { useCommentAttachments, useDeleteAttachment } from '@/hooks/useAttachments'
 import { AttachmentItem } from '@/components/attachment/AttachmentItem'
 import { FileUpload } from '@/components/attachment/FileUpload'
-import type { ChecklistItem, AttachmentWithUploader } from '@/types/database'
+import type { CommentChecklistItem, AttachmentWithUploader } from '@/types/database'
 
-interface ChecklistSectionProps {
-  taskId: string
-  projectId: string
-  items: ChecklistItem[]
-  canEdit: boolean
+interface CommentChecklistSectionProps {
+  commentId: string
+  /** Show add/delete/reorder/inline-edit controls (author while editing). */
+  editable: boolean
+  /** Allow toggling checkboxes (author). */
+  canToggle: boolean
 }
 
-export function ChecklistSection({ taskId, projectId, items, canEdit }: ChecklistSectionProps) {
+export function CommentChecklistSection({ commentId, editable, canToggle }: CommentChecklistSectionProps) {
   const [newTitle, setNewTitle] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const { user } = useAuth()
-  const createItem = useCreateChecklistItem(projectId)
-  const updateItem = useUpdateChecklistItem(projectId)
-  const deleteItem = useDeleteChecklistItem(projectId)
-  const reorderItems = useReorderChecklistItems(projectId)
+  const { data: items = [] } = useCommentChecklist(commentId)
+  const createItem = useCreateCommentChecklistItem(commentId)
+  const updateItem = useUpdateCommentChecklistItem(commentId)
+  const deleteItem = useDeleteCommentChecklistItem(commentId)
+  const reorderItems = useReorderCommentChecklistItems(commentId)
 
-  // Shared cache with the main AttachmentList — no extra fetch. Group by item.
-  const { data: attachments } = useTaskAttachments(taskId)
-  const deleteAttachment = useDeleteAttachment(taskId)
+  // Shared cache with CommentItem's attachment list. Group item-linked ones.
+  const { data: attachments } = useCommentAttachments(commentId)
+  const deleteAttachment = useDeleteAttachment(undefined, commentId)
   const byItem = new Map<string, AttachmentWithUploader[]>()
   for (const a of attachments ?? []) {
-    if (!a.checklist_item_id) continue
-    const list = byItem.get(a.checklist_item_id) ?? []
+    if (!a.comment_checklist_item_id) continue
+    const list = byItem.get(a.comment_checklist_item_id) ?? []
     list.push(a)
-    byItem.set(a.checklist_item_id, list)
+    byItem.set(a.comment_checklist_item_id, list)
   }
 
   const handleDeleteAttachment = useCallback(
@@ -57,23 +60,16 @@ export function ChecklistSection({ taskId, projectId, items, canEdit }: Checklis
   const handleAdd = useCallback(() => {
     const title = newTitle.trim()
     if (!title) return
-    createItem.mutate({ taskId, title, position: items.length })
+    createItem.mutate({ title, position: items.length })
     setNewTitle('')
     inputRef.current?.focus()
-  }, [newTitle, taskId, items.length, createItem])
+  }, [newTitle, items.length, createItem])
 
   const handleToggle = useCallback(
-    (item: ChecklistItem) => {
-      updateItem.mutate({ id: item.id, taskId, updates: { is_done: !item.is_done } })
+    (item: CommentChecklistItem) => {
+      updateItem.mutate({ id: item.id, updates: { is_done: !item.is_done } })
     },
-    [taskId, updateItem],
-  )
-
-  const handleDelete = useCallback(
-    (id: string) => {
-      deleteItem.mutate({ id, taskId })
-    },
-    [taskId, deleteItem],
+    [updateItem],
   )
 
   const handleDragEnd = useCallback(
@@ -82,25 +78,25 @@ export function ChecklistSection({ taskId, projectId, items, canEdit }: Checklis
       const reordered = [...items]
       const [moved] = reordered.splice(result.source.index, 1)
       reordered.splice(result.destination.index, 0, moved!)
-      reorderItems.mutate({ taskId, orderedIds: reordered.map((i) => i.id) })
+      reorderItems.mutate({ orderedIds: reordered.map((i) => i.id) })
     },
-    [items, taskId, reorderItems],
+    [items, reorderItems],
   )
 
+  // Nothing to show for a plain comment that isn't being edited.
+  if (total === 0 && !editable) return null
+
   return (
-    <div>
+    <div className="mt-2 rounded-md border border-border/60 bg-muted/20 px-2 py-1.5">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
           Checklist{total > 0 && ` (${completed}/${total})`}
         </label>
-        {total > 0 && (
-          <span className="text-xs text-muted-foreground">{pct}%</span>
-        )}
+        {total > 0 && <span className="text-[10px] text-muted-foreground">{pct}%</span>}
       </div>
 
-      {/* Progress bar */}
       {total > 0 && (
-        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
           <div
             className="h-full rounded-full bg-primary transition-all duration-300"
             style={{ width: `${pct}%` }}
@@ -108,26 +104,24 @@ export function ChecklistSection({ taskId, projectId, items, canEdit }: Checklis
         </div>
       )}
 
-      {/* Items */}
       <DragDropContext onDragEnd={handleDragEnd}>
-        <Droppable droppableId="checklist" isDropDisabled={!canEdit}>
+        <Droppable droppableId={`comment-checklist-${commentId}`} isDropDisabled={!editable}>
           {(provided) => (
-            <div ref={provided.innerRef} {...provided.droppableProps} className="mt-2 space-y-0.5">
+            <div ref={provided.innerRef} {...provided.droppableProps} className="mt-1.5 space-y-0.5">
               {items.map((item, index) => (
                 <ChecklistItemRow
                   key={item.id}
                   item={item}
                   index={index}
-                  canEdit={canEdit}
-                  taskId={taskId}
+                  editable={editable}
+                  canToggle={canToggle}
+                  commentId={commentId}
                   userId={user?.id}
                   attachments={byItem.get(item.id) ?? []}
                   onToggle={handleToggle}
-                  onDelete={handleDelete}
+                  onDelete={(id) => deleteItem.mutate({ id })}
                   onDeleteAttachment={handleDeleteAttachment}
-                  onTitleChange={(id, title) =>
-                    updateItem.mutate({ id, taskId, updates: { title } })
-                  }
+                  onTitleChange={(id, title) => updateItem.mutate({ id, updates: { title } })}
                 />
               ))}
               {provided.placeholder}
@@ -136,10 +130,9 @@ export function ChecklistSection({ taskId, projectId, items, canEdit }: Checklis
         </Droppable>
       </DragDropContext>
 
-      {/* Add item */}
-      {canEdit && (
-        <div className="mt-2 flex items-center gap-2">
-          <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+      {editable && (
+        <div className="mt-1.5 flex items-center gap-2">
+          <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
             type="text"
@@ -163,13 +156,14 @@ export function ChecklistSection({ taskId, projectId, items, canEdit }: Checklis
 // ─── Individual item row ────────────────────────────────────────────
 
 interface ChecklistItemRowProps {
-  item: ChecklistItem
+  item: CommentChecklistItem
   index: number
-  canEdit: boolean
-  taskId: string
+  editable: boolean
+  canToggle: boolean
+  commentId: string
   userId?: string
   attachments: AttachmentWithUploader[]
-  onToggle: (item: ChecklistItem) => void
+  onToggle: (item: CommentChecklistItem) => void
   onDelete: (id: string) => void
   onDeleteAttachment: (id: string, storagePath: string) => void
   onTitleChange: (id: string, title: string) => void
@@ -178,8 +172,9 @@ interface ChecklistItemRowProps {
 function ChecklistItemRow({
   item,
   index,
-  canEdit,
-  taskId,
+  editable,
+  canToggle,
+  commentId,
   userId,
   attachments,
   onToggle,
@@ -201,7 +196,7 @@ function ChecklistItemRow({
   }
 
   return (
-    <Draggable draggableId={item.id} index={index} isDragDisabled={!canEdit}>
+    <Draggable draggableId={item.id} index={index} isDragDisabled={!editable}>
       {(provided) => (
         <div
           ref={provided.innerRef}
@@ -209,7 +204,7 @@ function ChecklistItemRow({
           className="group rounded px-1 py-0.5 hover:bg-muted/50"
         >
           <div className="flex items-center gap-2">
-          {canEdit && (
+          {editable && (
             <span
               {...provided.dragHandleProps}
               className="shrink-0 cursor-grab text-muted-foreground/0 group-hover:text-muted-foreground/40"
@@ -221,7 +216,7 @@ function ChecklistItemRow({
           <input
             type="checkbox"
             checked={item.is_done}
-            disabled={!canEdit}
+            disabled={!canToggle}
             onChange={() => onToggle(item)}
             className="shrink-0 accent-primary disabled:opacity-40"
           />
@@ -248,7 +243,7 @@ function ChecklistItemRow({
                 item.is_done && 'text-muted-foreground line-through',
               )}
               onDoubleClick={() => {
-                if (canEdit) {
+                if (editable) {
                   setDraft(item.title)
                   setEditing(true)
                 }
@@ -258,11 +253,11 @@ function ChecklistItemRow({
             </span>
           )}
 
-          {canEdit && (
-            <FileUpload compact taskId={taskId} checklistItemId={item.id} />
+          {canToggle && (
+            <FileUpload compact commentId={commentId} commentChecklistItemId={item.id} />
           )}
 
-          {canEdit && (
+          {editable && (
             <button
               onClick={() => onDelete(item.id)}
               className="shrink-0 text-muted-foreground/0 transition-colors hover:text-destructive group-hover:text-muted-foreground/40"

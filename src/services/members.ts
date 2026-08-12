@@ -134,6 +134,9 @@ export async function acceptInvite(memberId: string): Promise<void> {
 
   if (error) throw error
 
+  // Remove the now-resolved invite notification (Accept/Decline buttons live on it)
+  await supabase.from('notifications').delete().eq('project_member_id', memberId)
+
   // Notify project owner that member joined
   if (membership) {
     const [{ data: owner }, { data: project }, { data: joiner }] = await Promise.all([

@@ -9,6 +9,7 @@ import { ReactionBar } from './ReactionBar'
 import { useToggleReaction } from '@/hooks/useComments'
 import { InlineCommentImage } from './InlineCommentImage'
 import { InlineFileLink } from './InlineFileLink'
+import { CommentChecklistSection } from './CommentChecklistSection'
 import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import {
   DragDropContext,
@@ -37,6 +38,7 @@ interface CommentItemProps {
   taskAttachments?: AttachmentWithUploader[]
   onEdit: (commentId: string, body: string) => Promise<void> | void
   onDelete: (commentId: string) => void
+  readOnly?: boolean
 }
 
 export function CommentItem({
@@ -46,6 +48,7 @@ export function CommentItem({
   taskAttachments = [],
   onEdit,
   onDelete,
+  readOnly = false,
 }: CommentItemProps) {
   const { user } = useAuth()
   const [editing, setEditing] = useState(false)
@@ -249,7 +252,7 @@ export function CommentItem({
               (edited)
             </span>
           )}
-          {isOwn && !editing && (
+          {isOwn && !editing && !readOnly && (
             <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={startEditing}
@@ -366,6 +369,9 @@ export function CommentItem({
               </div>
             )}
 
+            {/* Checklist (editable) */}
+            <CommentChecklistSection commentId={comment.id} canToggle={isOwn} editable={isOwn} />
+
             <div className="flex items-center gap-2">
               <button
                 onClick={handleSave}
@@ -405,6 +411,11 @@ export function CommentItem({
           </div>
         )}
 
+        {/* Comment checklist (view mode) */}
+        {!editing && (
+          <CommentChecklistSection commentId={comment.id} canToggle={isOwn} editable={false} />
+        )}
+
         {/* Comment attachments (view mode) */}
         {!editing && (() => {
           const commentAttachments = attachments ?? []
@@ -435,6 +446,7 @@ export function CommentItem({
             reactions={comment.reactions ?? []}
             currentUserId={user?.id}
             memberMap={memberMap}
+            disabled={readOnly}
             onToggle={(emoji) => {
               if (!user) return
               toggleReaction.mutate({
