@@ -14,8 +14,8 @@ interface VelocityChartProps {
   data: VelocityEntry[]
 }
 
-const BAR_COLOR = '#3b82f6' // blue-500
-const AVG_COLOR = '#f59e0b' // amber-500 — distinct from bars
+const BAR_COLOR = 'var(--color-chart-1)'
+const AVG_COLOR = 'var(--color-chart-5)' // distinct from bars
 
 export function VelocityChart({ data }: VelocityChartProps) {
   if (data.length === 0) {
@@ -89,8 +89,8 @@ export function VelocityChart({ data }: VelocityChartProps) {
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
+                backgroundColor: 'var(--color-card)',
+                border: '1px solid var(--color-border)',
                 borderRadius: '0.5rem',
                 fontSize: '12px',
               }}

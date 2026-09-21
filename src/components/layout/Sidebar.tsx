@@ -13,6 +13,7 @@ import {
   Star,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Logo, LogoMark } from '@/components/ui/Logo'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePendingInviteCount } from '@/hooks/useInvites'
 import { useMyProjects } from '@/hooks/useProjects'
@@ -49,23 +50,24 @@ export function Sidebar({ collapsed, onToggle, projectSlug }: SidebarProps) {
         collapsed ? 'w-16' : 'w-56'
       )}
     >
-      <div className="flex h-14 items-center justify-between border-b border-border px-4">
-        {!collapsed && (
-          <span className="text-sm font-semibold text-foreground tracking-tight">
-            Task Manager
-          </span>
+      <div className={cn('flex h-14 items-center border-b border-border px-4', collapsed ? 'justify-center' : 'justify-between')}>
+        {collapsed ? (
+          // ponytail: no room for mark + chevron at w-16, so the mark is the expand button
+          <button onClick={onToggle} aria-label="Expand sidebar" className="rounded-md transition-opacity hover:opacity-80">
+            <LogoMark />
+          </button>
+        ) : (
+          <>
+            <Logo />
+            <button
+              onClick={onToggle}
+              aria-label="Collapse sidebar"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </>
         )}
-        <button
-          onClick={onToggle}
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-        >
-          <ChevronLeft
-            className={cn(
-              'h-4 w-4 transition-transform',
-              collapsed && 'rotate-180'
-            )}
-          />
-        </button>
       </div>
 
       <nav className="flex-1 space-y-1 p-2">

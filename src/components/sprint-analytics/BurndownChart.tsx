@@ -14,8 +14,8 @@ interface BurndownChartProps {
   data: BurndownPoint[]
 }
 
-const IDEAL_COLOR = '#64748b' // slate-500 — visible on dark bg
-const ACTUAL_COLOR = '#3b82f6' // blue-500
+const IDEAL_COLOR = 'var(--color-muted-foreground)'
+const ACTUAL_COLOR = 'var(--color-chart-1)'
 
 export function BurndownChart({ data }: BurndownChartProps) {
   const [mode, setMode] = useState<'tasks' | 'points'>('tasks')
@@ -88,8 +88,8 @@ export function BurndownChart({ data }: BurndownChartProps) {
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
+                backgroundColor: 'var(--color-card)',
+                border: '1px solid var(--color-border)',
                 borderRadius: '0.5rem',
                 fontSize: '12px',
               }}

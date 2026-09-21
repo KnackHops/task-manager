@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { Logo } from '@/components/ui/Logo'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/login')({
@@ -32,7 +33,10 @@ function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold text-foreground">Task Manager</h1>
+          <h1 className="flex justify-center">
+            <Logo className="text-2xl gap-3" markClassName="h-10 w-10" />
+            <span className="sr-only">Task Manager</span>
+          </h1>
           <p className="text-sm text-muted-foreground">
             Sign in to your account
           </p>
