@@ -39,7 +39,6 @@ function SignupPage() {
             <Logo className="text-2xl gap-3" markClassName="h-10 w-10" />
             <span className="sr-only">Task Manager</span>
           </h1>
-          <p className="text-sm text-muted-foreground">Create your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
