@@ -5,22 +5,24 @@ import { BoardColumn } from './BoardColumn'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useUpdateProject, projectKeys } from '@/hooks/useProjects'
 import { useUpdateColumn } from '@/hooks/useColumns'
-import { useBoardDnd } from '@/hooks/useBoardDnd'
+import { useBoardDnd, type BoardFilter } from '@/hooks/useBoardDnd'
 import { useProjectContext } from '@/contexts/ProjectContext'
 
 interface BoardContainerProps {
   projectId: string
   sprintId?: string | null
+  filter?: BoardFilter
   onTaskClick: (taskId: string) => void
 }
 
 export function BoardContainer({
   projectId,
   sprintId,
+  filter,
   onTaskClick,
 }: BoardContainerProps) {
   const { project, columns: projectColumns, canManageColumns } = useProjectContext()
-  const { grouped, handleDragEnd, isLoading } = useBoardDnd(projectId, sprintId)
+  const { grouped, handleDragEnd, isLoading, isFiltered } = useBoardDnd(projectId, sprintId, filter)
   const updateProject = useUpdateProject(project.slug)
   const updateColumn = useUpdateColumn(projectId, project.slug)
   const isRefetchingProject = useIsFetching({ queryKey: projectKeys.detail(project.slug) })
@@ -60,6 +62,7 @@ export function BoardContainer({
             column={col}
             tasks={grouped[col.id] ?? []}
             onTaskClick={onTaskClick}
+            dragDisabled={isFiltered}
             isDefault={project.default_column_id === col.id}
             isSprintColumn={project.sprint_column_id === col.id}
             isDone={col.is_done}

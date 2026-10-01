@@ -13,6 +13,8 @@ import { useTasks } from '@/hooks/useTasks'
 import { BoardContainer } from '@/components/board/BoardContainer'
 import { BoardListView } from '@/components/board/BoardListView'
 import { MyTasksView } from '@/components/board/MyTasksView'
+import { BoardFilterBar } from '@/components/board/BoardFilterBar'
+import type { BoardFilter } from '@/hooks/useBoardDnd'
 import { cn } from '@/lib/utils'
 import { SprintFilterDropdown, type SprintFilterDropdownHandle } from '@/components/board/SprintFilterDropdown'
 import { SprintTaskSelectionPanel } from '@/components/board/SprintTaskSelectionPanel'
@@ -55,6 +57,7 @@ function BoardPage() {
     }
   }
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [taskFilter, setTaskFilter] = useState<BoardFilter>({ priorities: [], tagIds: [] })
   const [selectionPanelSprint, setSelectionPanelSprint] = useState<Sprint | null>(null)
   const [completeDialogSprint, setCompleteDialogSprint] = useState<Sprint | null>(null)
   const [moveTarget, setMoveTarget] = useState<string>('backlog')
@@ -319,6 +322,8 @@ function BoardPage() {
         </div>
       </div>
 
+      {viewMode !== 'mine' && <BoardFilterBar value={taskFilter} onChange={setTaskFilter} />}
+
       <div className="flex-1 min-h-0">
         {viewMode === 'mine' ? (
           <MyTasksView
@@ -331,12 +336,14 @@ function BoardPage() {
           <BoardContainer
             projectId={project.id}
             sprintId={boardSprintId}
+            filter={taskFilter}
             onTaskClick={(taskId) => setSelectedTaskId(taskId)}
           />
         ) : (
           <BoardListView
             projectId={project.id}
             sprintId={boardSprintId}
+            filter={taskFilter}
             onTaskClick={(taskId) => setSelectedTaskId(taskId)}
           />
         )}

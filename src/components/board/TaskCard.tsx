@@ -21,9 +21,10 @@ interface TaskCardProps {
   task: TaskWithRelations
   index: number
   onClick: (taskId: string) => void
+  dragDisabled?: boolean
 }
 
-export function TaskCard({ task, index, onClick }: TaskCardProps) {
+export function TaskCard({ task, index, onClick, dragDisabled }: TaskCardProps) {
   const { project } = useProjectContext()
   const { data: sprints } = useSprints(project.id)
   const taskId = formatTaskRef(project.prefix, task.task_number)
@@ -32,7 +33,7 @@ export function TaskCard({ task, index, onClick }: TaskCardProps) {
     : null
 
   return (
-    <Draggable draggableId={task.id} index={index}>
+    <Draggable draggableId={task.id} index={index} isDragDisabled={dragDisabled}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}

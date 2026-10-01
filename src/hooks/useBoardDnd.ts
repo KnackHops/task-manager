@@ -5,7 +5,15 @@ import type { DropResult } from '@hello-pangea/dnd'
 import { useTasks, useReorderTask, taskKeys } from '@/hooks/useTasks'
 import { useSprints } from '@/hooks/useSprints'
 import { useProjectContext } from '@/contexts/ProjectContext'
-import type { TaskWithRelations } from '@/types/database'
+import type { TaskPriority, TaskWithRelations } from '@/types/database'
+
+export interface BoardFilter {
+  priorities: TaskPriority[]
+  tagIds: string[]
+}
+
+const NO_PRIORITIES: TaskPriority[] = []
+const NO_TAGS: string[] = []
 
 /**
  * Shared board drag-and-drop state + handler. Owns the column grouping (sorted by
@@ -14,7 +22,7 @@ import type { TaskWithRelations } from '@/types/database'
  * write, reorder mutation). Consumed by both the kanban board and the list view so the
  * two stay behaviorally identical.
  */
-export function useBoardDnd(projectId: string, sprintId?: string | null) {
+export function useBoardDnd(projectId: string, sprintId?: string | null, filter?: BoardFilter) {
   const queryClient = useQueryClient()
   const { project, columns: projectColumns, doneColumnIds } = useProjectContext()
   const { data: tasks, isLoading } = useTasks(
@@ -38,6 +46,12 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
     isDoneOverride?: { is_done: boolean; done_at: string | null }
   } | null>(null)
 
+  const priorities = filter?.priorities ?? NO_PRIORITIES
+  const tagIds = filter?.tagIds ?? NO_TAGS
+  // ponytail: drag disabled while filtered — dnd indices are relative to the visible
+  // list. Map visible→full index in handleDragEnd if drag-while-filtered is needed.
+  const isFiltered = priorities.length > 0 || tagIds.length > 0
+
   const grouped = useMemo(() => {
     const map: Record<string, TaskWithRelations[]> = {}
     for (const col of projectColumns) {
@@ -47,6 +61,8 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
     if (tasks) {
       for (const task of tasks) {
         const col = map[task.column_id]
+        if (priorities.length && !priorities.includes(task.priority)) continue
+        if (tagIds.length && !task.tags?.some((t) => tagIds.includes(t.id))) continue
         if (col) {
           col.push(task)
         }
@@ -79,7 +95,7 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
     }
 
     return map
-  }, [tasks, projectColumns, pendingReorder])
+  }, [tasks, projectColumns, pendingReorder, priorities, tagIds])
 
   const handleDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result
@@ -207,5 +223,5 @@ export function useBoardDnd(projectId: string, sprintId?: string | null) {
     )
   }
 
-  return { grouped, handleDragEnd, isLoading }
+  return { grouped, handleDragEnd, isLoading, isFiltered }
 }

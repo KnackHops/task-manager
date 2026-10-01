@@ -20,9 +20,10 @@ interface TaskListRowProps {
   /** This user's closed-session seconds on the task; the running clock is added live. */
   seconds?: number
   onClick: (taskId: string) => void
+  dragDisabled?: boolean
 }
 
-export function TaskListRow({ task, index, seconds = 0, onClick }: TaskListRowProps) {
+export function TaskListRow({ task, index, seconds = 0, onClick, dragDisabled }: TaskListRowProps) {
   const { project, columns, doneColumnIds, canEditTask } = useProjectContext()
   const updateTask = useUpdateTask(project.id)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -80,7 +81,7 @@ export function TaskListRow({ task, index, seconds = 0, onClick }: TaskListRowPr
   }
 
   return (
-    <Draggable draggableId={task.id} index={index} isDragDisabled={!canEditTask}>
+    <Draggable draggableId={task.id} index={index} isDragDisabled={!canEditTask || dragDisabled}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}

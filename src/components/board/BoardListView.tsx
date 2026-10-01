@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TaskListRow } from './TaskListRow'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useBoardDnd } from '@/hooks/useBoardDnd'
+import { useBoardDnd, type BoardFilter } from '@/hooks/useBoardDnd'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProjectTaskSeconds } from '@/hooks/useTimeTracking'
@@ -12,6 +12,7 @@ import { useProjectTaskSeconds } from '@/hooks/useTimeTracking'
 interface BoardListViewProps {
   projectId: string
   sprintId?: string | null
+  filter?: BoardFilter
   onTaskClick: (taskId: string) => void
 }
 
@@ -31,12 +32,13 @@ function loadCollapsed(projectId: string): Record<string, boolean> {
 export function BoardListView({
   projectId,
   sprintId,
+  filter,
   onTaskClick,
 }: BoardListViewProps) {
   const { columns } = useProjectContext()
   const { user } = useAuth()
   const { data: secondsMap } = useProjectTaskSeconds(user?.id, projectId)
-  const { grouped, handleDragEnd, isLoading } = useBoardDnd(projectId, sprintId)
+  const { grouped, handleDragEnd, isLoading, isFiltered } = useBoardDnd(projectId, sprintId, filter)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
     loadCollapsed(projectId)
   )
@@ -110,6 +112,7 @@ export function BoardListView({
                           index={index}
                           seconds={secondsMap?.[task.id] ?? 0}
                           onClick={onTaskClick}
+                          dragDisabled={isFiltered}
                         />
                       ))}
                     {provided.placeholder}

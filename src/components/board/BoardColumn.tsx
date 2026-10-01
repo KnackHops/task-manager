@@ -8,6 +8,7 @@ interface BoardColumnProps {
   column: ProjectColumn
   tasks: TaskWithRelations[]
   onTaskClick: (taskId: string) => void
+  dragDisabled?: boolean
   isDefault?: boolean
   onSetDefault?: () => void
   isSprintColumn?: boolean
@@ -22,6 +23,7 @@ export function BoardColumn({
   column,
   tasks,
   onTaskClick,
+  dragDisabled,
   isDefault,
   onSetDefault,
   isSprintColumn,
@@ -116,6 +118,7 @@ export function BoardColumn({
                 task={task}
                 index={index}
                 onClick={onTaskClick}
+                dragDisabled={dragDisabled}
               />
             ))}
             {provided.placeholder}
